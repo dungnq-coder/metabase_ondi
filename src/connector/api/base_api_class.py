@@ -1,5 +1,6 @@
 import requests
 
+
 class Base:
 
     api_url: str = None
@@ -9,7 +10,12 @@ class Base:
         self._api_token = api_token
         self._headers = {'Authorization': 'Bearer ' + api_token}
 
-    def _request(self, method: str, url: str, *, params: dict = None, json_data: dict = None):
+    def _request(self,
+                 method: str,
+                 url: str,
+                 *,
+                 params: dict = None,
+                 json_data: dict = None):
         response = requests.request(method=method,
                                     url=url,
                                     headers=self._headers,
@@ -29,7 +35,7 @@ class Base:
 
     def _delete(self, url: str, params: dict = None):
         return self._request('DELETE', url, params=params)
-    
+
     def get_url(self, **kwargs) -> str:
         missing_params = [
             param for param in self.PARAMS if param not in kwargs
@@ -37,6 +43,5 @@ class Base:
         if missing_params:
             raise ValueError(
                 f"Missing required parameters: {', '.join(missing_params)}")
-        
-        return self.api_url.format(
-                *[kwargs[param] for param in self.PARAMS])
+
+        return self.api_url.format(*[kwargs[param] for param in self.PARAMS])
