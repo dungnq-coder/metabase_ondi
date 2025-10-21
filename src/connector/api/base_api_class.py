@@ -3,12 +3,14 @@ import requests
 
 class Base:
 
-    api_url: str = None
-    PARAMS: list = []
-
-    def __init__(self, api_token: str):
+    def __init__(self, api_token: str, auth_type: str = 'api_key'):
         self._api_token = api_token
-        self._headers = {'Authorization': 'Bearer ' + api_token}
+        if auth_type == 'api_key':
+            self._headers = {'x-api-key': api_token}
+        elif auth_type == 'session':
+            self._headers = {'X-Metabase-Session': api_token}
+        else:
+            raise ValueError("auth_type must be 'api_key' or 'session'")
 
     def _request(self,
                  method: str,
@@ -45,3 +47,9 @@ class Base:
                 f"Missing required parameters: {', '.join(missing_params)}")
 
         return self.api_url.format(*[kwargs[param] for param in self.PARAMS])
+
+    def get_self_url(self) -> str:
+        return self._api_url
+
+    def set_self_url(self, url: str) -> None:
+        self._api_url = url

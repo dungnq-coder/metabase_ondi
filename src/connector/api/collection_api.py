@@ -20,10 +20,4 @@ class CollectionAPI(Base):
         return f'{self._api_url}/trash'
 
     def get_collection_items_url(self, collection_id: int) -> str:
-        return f'{self._api_url}{collection_id}/items'
-
-    def get_self_url(self) -> str:
-        return self._api_url
-
-    def set_self_url(self, url: str) -> None:
-        self._api_url = url
+        return f'{self._api_url}/{collection_id}/items'
