@@ -1,6 +1,7 @@
 import os
-import yaml
 from typing import Any, Optional
+
+import yaml
 
 
 def load_config(filename: str = 'config.yaml') -> dict:
@@ -13,7 +14,7 @@ def load_config(filename: str = 'config.yaml') -> dict:
         with open(file_path, 'r') as file:
             return yaml.safe_load(file) or {}
     except FileNotFoundError:
-        raise FileNotFoundError(f"Configuration file not found: {file_path}")
+        raise FileNotFoundError(f'Configuration file not found: {file_path}')
     except yaml.YAMLError as e:
         raise ValueError(f"YAML parsing error in '{file_path}': {e}")
 
@@ -22,6 +23,7 @@ class DotDict(dict):
     """
     Dictionary with dot notation access.
     """
+
     def __getattr__(self, item):
         return self.get(item)
 
@@ -36,6 +38,7 @@ class BaseConfig:
     """
     Base class for accessing configuration values via dot notation or key path.
     """
+
     def __init__(self, config_data: Optional[dict] = None):
         self._config = config_data or self._load_main_config()
 
@@ -84,14 +87,14 @@ class BaseConfig:
         if not hasattr(self, '_yaml_template_config'):
             self._yaml_template_config = load_config()
         return self._yaml_template_config
-    
+
     @property
     def base_url(self) -> str:
         """
         Get the base URL from configuration.
         """
         return self.get('metabase.base_url', '')
-    
+
     @property
     def api_token(self) -> str:
         """

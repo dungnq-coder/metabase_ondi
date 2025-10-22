@@ -11,13 +11,50 @@ class CollectionAPI(Base):
         """
         Needs init url not other endpoint like items...
         """
-        return f'{self._api_url}/root'
+        url = self._api_url.rstrip('/')
+        return f'{url}/root'
 
     def get_trash_url(self) -> str:
         """
         Needs init url not other endpoint like items...
         """
-        return f'{self._api_url}/trash'
+        url = self._api_url.rstrip('/')
+        return f'{url}/trash'
 
-    def get_collection_items_url(self, collection_id: int) -> str:
-        return f'{self._api_url}/{collection_id}/items'
+    def get_tree_url(self) -> str:
+        """
+        Needs init url not other endpoint like items...
+        """
+        url = self._api_url.rstrip('/')
+        return f'{url}/tree'
+
+    def list__all_collections(self):
+        """List all collections."""
+        return self._get(self.get_self_url()).json()
+
+    def list_all_collections_in_tree(self):
+        """List all collections."""
+        return self._get(self.get_tree_url()).json()
+
+    def get_specific_collection(self, collection_id: int):
+        """Get specific collection by ID."""
+        url = self.get_self_url()
+        url_new = self.get_param_url()
+        self.set_self_url(url_new)
+
+        response = self._get(url=self.get_url(collection_id)).json()
+        self.set_self_url(url)
+
+        return response
+
+    def get_items_in_a_specific_collection(self, collection_id: int):
+        """Get specific collection by ID."""
+        url = self.get_self_url()
+        url_new = self.get_param_url()
+        self.set_self_url(url_new)
+
+        response = self._get(
+            url=self.get_url(collection_id, extra_path='items')).json()
+        self.set_self_url(url)
+
+        return response

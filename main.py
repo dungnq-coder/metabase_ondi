@@ -1,14 +1,40 @@
-from pprint import pprint
-from src.connector.manager import MetabaseAPIManager
 from core.base_config import BaseConfig
+from src.connector.manager import MetabaseAPIManager
+from src.menu_cli.cards_menu import card_menu
+from src.menu_cli.collections_menu import collection_menu
+from src.menu_cli.dashboards_menu import dashboard_menu
+from src.utils.screen_contact import clear_screen
 
-config = BaseConfig()
-api_token = config.api_token
-base_url = config.base_url
 
-manager = MetabaseAPIManager(api_token, base_url)
+def show_menu(title: str, options: list[str]) -> str:
+    clear_screen()
+    print(f'{title}')
+    print('=' * 60)
+    for idx, option in enumerate(options, start=1):
+        print(f'{idx}. {option}')
+    return input('\n🔢 Choose an option: ')
 
-collection_url = manager.collection.get_self_url()
-print(f'Collection URL: {collection_url}')
-print(manager.collection._api_token)
-pprint(manager.collection._get(collection_url).content)
+
+def run_cli():
+    config = BaseConfig()
+    manager = MetabaseAPIManager(api_token=config.api_token,
+                                 base_url=config.base_url)
+
+    while True:
+        choice = show_menu('📦 Metabase CLI Tool',
+                           ['Collections', 'Dashboards', 'Cards', 'Exit'])
+        if choice == '1':
+            collection_menu(manager)
+        elif choice == '2':
+            dashboard_menu(manager)
+        elif choice == '3':
+            card_menu(manager)
+        elif choice == '4':
+            print('👋 Exiting Metabase CLI. Goodbye!')
+            break
+        else:
+            input('❗ Invalid choice. Press Enter to continue.')
+
+
+if __name__ == '__main__':
+    run_cli()

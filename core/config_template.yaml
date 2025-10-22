@@ -1,0 +1,3 @@
+metabase:
+  api_token: 'enter_api_token'
+  base_url: 'enter_base_url_like_https://www.your-metabase.com'

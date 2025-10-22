@@ -30,7 +30,8 @@ class MetabaseAPIManager:
             base_url (str): Base URL for Metabase API (e.g., 'https://your-metabase.com/api/card/').
         """
         self._api_token = api_token
-        self._base_url = base_url.rstrip('/')  # remove trailing slash if present
+        self._base_url = base_url.rstrip(
+            '/')  # remove trailing slash if present
         self._clients = {}
 
     def _get_client(self, cls, endpoint: str):
@@ -63,5 +64,3 @@ class MetabaseAPIManager:
     def dashboard(self) -> DashboardAPI:
         """API client for Metabase Dashboards."""
         return self._get_client(DashboardAPI, 'dashboard')
-
-    

@@ -7,17 +7,54 @@ class CardAPI(Base):
         super().__init__(api_token)
         self._api_url = url
 
-    def get_card_items_url(self, card_id: int) -> str:
-        return f'{self._api_url}/{card_id}/items'
+    def list_all_cards(self):
+        """List all cards."""
+        return self._get(self.get_self_url()).json()
 
-    def get_card_query_metadata_url(self, card_id: int) -> str:
-        return f'{self._api_url}/{card_id}/query_metadata'
+    def get_list_dashboard_with_specific_card(self, card_id: int):
+        """Get list of dashboards containing a specific card."""
+        original_url = self.get_self_url()
+        self.set_self_url(self.get_param_url())
 
-    def get_card_query_url(self, card_id: int) -> str:
-        return f'{self._api_url}/{card_id}/query'
+        response = self._get(
+            url=self.get_url(card_id, extra_path='dashboards')).json()
 
-    def get_card_public_link_url(self, card_id: int) -> str:
-        return f'{self._api_url}/{card_id}/public_link'
+        self.set_self_url(original_url)
+        return response
 
-    def get_card_copy_url(self, card_id: int) -> str:
-        return f'{self._api_url}/{card_id}/copy'
+    def get_card_detail(self, card_id: int, extra: str):
+        """
+        General method to get card-related details.
+        Examples of `extra`:
+            - 'items'
+            - 'query'
+            - 'query_metadata'
+            - 'public_link'
+            - 'dashboards'
+        """
+        original_url = self.get_self_url()
+        self.set_self_url(self.get_param_url())
+
+        response = self._get(
+            url=self.get_url(card_id, extra_path=extra)).json()
+
+        self.set_self_url(original_url)
+        return response
+
+    def post_card_action(self,
+                         card_id: int,
+                         action: str,
+                         payload: dict = None):
+        """
+        General method to perform POST actions on a card.
+        Examples of `action`:
+            - 'copy'
+        """
+        original_url = self.get_self_url()
+        self.set_self_url(self.get_param_url())
+
+        response = self._post(url=self.get_url(card_id, extra_path=action),
+                              json_data=payload or {}).json()
+
+        self.set_self_url(original_url)
+        return response
