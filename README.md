@@ -1,58 +1,97 @@
-Environment Setup Guide
-This project utilizes uv for fast and efficient management of virtual environments and dependencies. Please follow the steps below to set up your development environment.
 
-I. Installing the uv Tool
-uv is a high-performance package and environment manager built in Rust, designed as a modern replacement for pip and venv.
+---
 
-🐧 1. On Linux and macOS
-Open your Terminal and run the following command:
+# 🚀 Environment Setup Guide
 
-```curl -LsSf https://astral.sh/uv/install.sh | sh```
-🪟 2. On Windows (PowerShell/CMD)
-Open PowerShell or Command Prompt and run one of the following commands:
+This project uses **[uv](https://astral.sh/uv/)** — a fast, Rust-based tool for managing Python virtual environments and dependencies.
 
-# For PowerShell:
-```irm https://astral.sh/uv/install.ps1 | iex```
+Follow the steps below to set up your development environment.
 
-# Alternatively, for CMD (ensure curl is available):
-```curl -LsSf https://astral.sh/uv/install.sh | sh```
-Note: After installation, you may need to restart your terminal session or ensure the installation directory of uv is added to your system's PATH environment variable for the uv command to be accessible.
+---
 
-II. Setting Up the Virtual Environment
-Once uv is installed, we will proceed to create and activate the virtual environment using the specified Python version.
+## 📦 1. Installing `uv`
 
-🐧 1. On Linux and macOS
-Navigate to the project's root directory and run the commands below in sequence:
+`uv` is a high-performance, modern replacement for `pip` and `venv`.
 
-Create the virtual environment with Python 3.11.8:
+### 🐧 1.1 On Linux & macOS
 
-```uv venv python=3.11.8```
-Activate the virtual environment:
+Open your terminal and run:
 
-```source .venv/bin/activate```
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-```uv sync```
-🪟 2. On Windows (Command Prompt or PowerShell)
-Navigate to the project's root directory and run the commands below in sequence:
+### 🪟 1.2 On Windows (PowerShell / CMD)
 
-Create the virtual environment with Python 3.11.8:
+#### PowerShell
 
-```uv venv python=3.11.8```
-Activate the virtual environment:
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
+```
 
-For Command Prompt (CMD):
+#### Command Prompt (requires `curl`):
 
-```.venv\Scripts\activate```
-For PowerShell:
+```cmd
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-```.venv\Scripts\Activate.ps1```
+> ⚠️ **Note:** After installation, restart your terminal or ensure the `uv` binary is in your system's `PATH`.
 
-```uv sync```
+---
 
-III. Verification
-After successful activation, your command line prompt should display the environment name (.venv).
+## 🛠️ 2. Setting Up the Virtual Environment
 
-To quickly verify the Python version within the virtual environment:
+After installing `uv`, you can create and activate your virtual environment.
 
-```python --version```
-# Expected Output: Python 3.11.8
+### 🐧 2.1 On Linux & macOS
+
+Navigate to your project directory:
+
+```bash
+uv venv python=3.11.8
+source .venv/bin/activate
+uv sync
+```
+
+### 🪟 2.2 On Windows
+
+Navigate to your project directory, then:
+
+```cmd
+uv venv python=3.11.8
+```
+
+#### For CMD:
+
+```cmd
+.venv\Scripts\activate
+uv sync
+```
+
+#### For PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+uv sync
+```
+
+---
+
+## ✅ 3. Verification
+
+After activating the environment, your terminal prompt should include the name `.venv`.
+
+To verify the Python version:
+
+```bash
+python --version
+```
+
+✅ **Expected output:**
+
+```
+Python 3.11.8
+```
+
+---
+
