@@ -92,6 +92,12 @@ python --version
 ```
 Python 3.11.8
 ```
+## 4. Run
 
+After verify successfully you can run main.py for CLI:
+
+```bash
+python main.py
+```
+Make sure that you in root folder of project.
 ---
-

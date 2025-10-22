@@ -283,7 +283,10 @@ def print_dashboard_details(data: dict):
                 display = card.get('display', 'text')
                 icon = icon_display(display)
                 card_id = card.get('id')
-                print(f'   {i}. {icon} {name} [ID: {card_id}] [{display}]')
+                database_id = card.get('database_id')
+                print(
+                    f'   {i}. {icon} {name} [ID: {card_id}] [Database ID: {database_id}] [{display}]\n'
+                )
             else:
                 # Text box
                 text = dc.get('visualization_settings',
@@ -291,7 +294,7 @@ def print_dashboard_details(data: dict):
                 entity_id = dc.get('entity_id', '—')
                 text_preview = text[:40] + ('...' if len(text) > 40 else '')
                 print(
-                    f'   {i}. 📝 Text Box [Entity ID: {entity_id}]: {text_preview}'
+                    f'   {i}. 📝 Text Box [Entity ID: {entity_id}]: {text_preview}\n'
                 )
 
     print('=' * 60)
