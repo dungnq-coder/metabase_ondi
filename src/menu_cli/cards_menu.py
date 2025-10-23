@@ -1,7 +1,8 @@
 from pprint import pprint
 
 from src.connector.manager import MetabaseAPIManager
-from src.utils.input_utils import input_int, input_str, input_yes_no
+from src.utils.input_utils import (get_multiline_input, input_int, input_str,
+                                   input_yes_no)
 from src.utils.process_response_data import *
 from src.utils.screen_contact import clear_screen
 
@@ -18,7 +19,7 @@ def list_cards(manager: MetabaseAPIManager):
 def view_card(manager: MetabaseAPIManager, cid: int):
     card = manager.card.get_card_detail(cid)
     clear_screen()
-    pprint(card)
+    print_card_details(card)
     input('🔙 Press Enter to return...')
 
 
@@ -33,7 +34,24 @@ def update_card(manager: MetabaseAPIManager):
         print('Update cancelled.')
         input('🔙 Press Enter to return...')
         return
-    print(f'🔧 Update card {cid} → Function in development')
+    card_detail = manager.card.get_card_detail(cid)
+    database_id = input_int("Enter new database ID (or 'q' to cancel): ")
+    if database_id is None:
+        print('Update cancelled.')
+        input('🔙 Press Enter to return...')
+        return
+    query = get_multiline_input("Enter new SQL query (or 'q' to cancel): ")
+    if query is None:
+        print('Update cancelled.')
+        input('🔙 Press Enter to return...')
+        return
+    updated_payload = manager.card.get_update_payload(card_detail, database_id,
+                                                      query)
+    response = manager.card.update_specific_card(cid, updated_payload)
+    print_card_details(response)
+
+    # if response.status_code < 400:
+    #     print(f'Card ID {cid} updated successfully.')
     input('🔙 Press Enter to return...')
 
 

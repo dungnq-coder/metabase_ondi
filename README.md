@@ -100,4 +100,5 @@ After verify successfully you can run main.py for CLI:
 python main.py
 ```
 Make sure that you in root folder of project.
+
 ---

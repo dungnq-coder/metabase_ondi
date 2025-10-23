@@ -33,3 +33,14 @@ def input_yes_no(prompt: str, default=None) -> bool | None:
         if value == 'q':
             return None
         print("❗ Please enter 'y' or 'n' (or press q to cancel).")
+
+
+def get_multiline_input(prompt='Enter multi line:'):
+    print(prompt)
+    lines = []
+    while True:
+        line = input()
+        if line.strip() == '':
+            break
+        lines.append(line)
+    return '\n'.join(lines)
