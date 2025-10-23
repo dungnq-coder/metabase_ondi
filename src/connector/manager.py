@@ -1,6 +1,7 @@
 from src.connector.api.card_api import CardAPI
 from src.connector.api.collection_api import CollectionAPI
 from src.connector.api.dashboard_api import DashboardAPI
+from src.connector.api.database_api import DatabaseAPI
 
 
 class MetabaseAPIManager:
@@ -64,3 +65,8 @@ class MetabaseAPIManager:
     def dashboard(self) -> DashboardAPI:
         """API client for Metabase Dashboards."""
         return self._get_client(DashboardAPI, 'dashboard')
+
+    @property
+    def database(self) -> DatabaseAPI:
+        """API client for Metabase databases."""
+        return self._get_client(DatabaseAPI, 'database')

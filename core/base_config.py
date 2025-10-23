@@ -101,3 +101,10 @@ class BaseConfig:
         Get the API token from configuration.
         """
         return self.get('metabase.api_token', '')
+
+    @property
+    def service_account(self) -> str:
+        """
+        Get the service account key from configuration.
+        """
+        return self.get('gcp.service_account_path', '')
