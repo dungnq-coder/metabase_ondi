@@ -96,6 +96,6 @@ class CardAPI(Base):
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
         response = self._put(url=self.get_url(card_id),
-                             json_data=payload or {}).json()
+                             json_data=payload or {})
         self.set_self_url(original_url)
         return response

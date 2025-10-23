@@ -40,7 +40,7 @@ def update_card(manager: MetabaseAPIManager):
         print('Update cancelled.')
         input('🔙 Press Enter to return...')
         return
-    query = get_multiline_input("Enter new SQL query (or 'q' to cancel): ")
+    query = get_multiline_input("Enter new SQL query (or 'Enter' to skip): ")
     if query is None:
         print('Update cancelled.')
         input('🔙 Press Enter to return...')
@@ -48,10 +48,9 @@ def update_card(manager: MetabaseAPIManager):
     updated_payload = manager.card.get_update_payload(card_detail, database_id,
                                                       query)
     response = manager.card.update_specific_card(cid, updated_payload)
-    print_card_details(response)
 
-    # if response.status_code < 400:
-    #     print(f'Card ID {cid} updated successfully.')
+    if response.status_code < 400:
+        print(f'Card ID {cid} updated successfully.')
     input('🔙 Press Enter to return...')
 
 
