@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 # ========== Utils ==========
@@ -455,5 +456,67 @@ def print_database_details(db: dict):
         print(f"\n⚠️  Caveats:\n   {db['caveats']}")
     if db.get('points_of_interest'):
         print(f"\n📍 Points of Interest:\n   {db['points_of_interest']}")
+
+    print('=' * 60)
+
+
+def print_database_summary(db):
+    """
+    Nicely print a concise summary of a database JSON response
+    in a clean, human-readable CLI format (similar to other print_ functions).
+
+    Supports both raw JSON strings and Python dicts.
+    Automatically hides null or overly verbose fields.
+    """
+
+    if not isinstance(db, dict):
+        print('⚠️  Unsupported response type.')
+        return
+
+    print('\n🧾 Database Summary')
+    print('=' * 60)
+
+    # --- Basic Info ---
+    print(f"🆔 ID              : {db.get('id', '—')}")
+    print(f"📛 Name            : {db.get('name', '—')}")
+    print(f"🗄️  Engine          : {db.get('engine', '—')}")
+    print(f"👤 Creator ID      : {db.get('creator_id', '—')}")
+    print(f"🌍 Timezone        : {db.get('timezone', '—')}")
+    print(
+        f"⚙️  Auto Run Query  : {'✅' if db.get('auto_run_queries') else '❌'}")
+    print(f"🔁 Full Sync        : {'✅' if db.get('is_full_sync') else '❌'}")
+    print(f"📦 Upload Enabled  : {'✅' if db.get('uploads_enabled') else '❌'}")
+    print(f"🧱 Audit DB         : {'✅' if db.get('is_audit') else '❌'}")
+    print(f"🧩 On Demand        : {'✅' if db.get('is_on_demand') else '❌'}")
+    print(f"🕒 Created At       : {db.get('created_at', '—')}")
+    print(f"🔄 Updated At       : {db.get('updated_at', '—')}")
+    print(f"📈 Initial Sync     : {db.get('initial_sync_status', '—')}")
+    print(f"🧭 Engine Version   : {db.get('dbms_version', '—')}")
+
+    # --- Features ---
+    features = db.get('features', []) or []
+    print(f'\n🧰 Supported Features ({len(features)}):')
+    if features:
+        preview = ', '.join(features[:5])
+        if len(features) > 5:
+            preview += f' ... (+{len(features) - 5} more)'
+        print(f'   {preview}')
+    else:
+        print('   • None listed')
+
+    # --- Details ---
+    details = db.get('details', {})
+    if details:
+        print('\n📋 Details:')
+        for k, v in details.items():
+            if 'service-account' in k:
+                print(f'   • {k}: [hidden]')
+            else:
+                print(f'   • {k}: {v}')
+
+    # --- Schedules ---
+    print('\n⏰ Sync Schedules:')
+    print(f"   • Metadata Sync : {db.get('metadata_sync_schedule', '—')}")
+    print(f"   • Cache Refresh : {db.get('cache_field_values_schedule', '—')}")
 
     print('=' * 60)

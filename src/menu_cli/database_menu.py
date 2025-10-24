@@ -34,11 +34,14 @@ def create_database(manager: MetabaseAPIManager):
     details = {}
     if engine == 'bigquery-cloud-sdk':
         project_id = input_str('Enter BigQuery project_id: ', required=True)
-        dataset_id = input_str('Enter BigQuery dataset_id: ', required=True)
         details = manager.database.create_bigquery_details(
-            project_id=project_id, dataset_id=dataset_id)
+            project_id=project_id)
     else:
-        print(f'{engine} will support soon.')
+        print(
+            f'⚠️  Engine "{engine}" is not supported yet. Please try again later.'
+        )
+        input('🔙 Press Enter to return...')
+        return
 
     is_full_sync = input_yes_no('Enable full schema sync? ')
     auto_run_queries = input_yes_no('Enable auto run queries?')
@@ -117,10 +120,6 @@ def create_database(manager: MetabaseAPIManager):
         cache_schedule=cache_schedule,
         metadata_schedule=metadata_schedule)
 
-    Path('debug').mkdir(exist_ok=True)
-    with open('debug/payload_preview.json', 'w', encoding='utf-8') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=4)
-
     print('\nSending create database request...')
     response = manager.database._post(
         url=manager.database.get_self_url(),
@@ -129,6 +128,7 @@ def create_database(manager: MetabaseAPIManager):
 
     if response.status_code < 400:
         print(f"✅ Database '{name}' created successfully!")
+        print_database_summary(db=response.json())
     else:
         print(f'❌ Failed to create database. Status: {response.status_code}')
         print(f'Response: {response.text}')

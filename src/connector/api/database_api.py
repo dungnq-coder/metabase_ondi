@@ -110,6 +110,7 @@ class DatabaseAPI(Base):
             'is_full_sync': is_full_sync,
             'auto_run_queries': auto_run_queries,
             'is_on_demand': is_on_demand,
+            'refingerprint': False,
             # "cache_ttl": cache_ttl,
             'connection_source': connection_source,
             'schedules': {
@@ -122,8 +123,7 @@ class DatabaseAPI(Base):
 
         return payload
 
-    def create_bigquery_details(self, project_id: str,
-                                dataset_id: str) -> dict:
+    def create_bigquery_details(self, project_id: str) -> dict:
         """
         Create 'details' part for BigQuery database payload.
         """
@@ -135,12 +135,11 @@ class DatabaseAPI(Base):
                 f'❌ Service account file not found: {service_account_path}')
 
         with open(service_account_path, 'r', encoding='utf-8') as f:
-            sa_json = json.load(f)
+            sa_json = f.read()
 
         return {
-            'project_id': project_id,
-            'dataset_id': dataset_id,
-            'service-account-json': sa_json
+            'project-id': project_id,
+            'service-account-json': sa_json,
         }
 
     def create_schedule(self,
