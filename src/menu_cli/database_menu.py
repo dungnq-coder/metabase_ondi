@@ -24,44 +24,86 @@ def view_database(manager: MetabaseAPIManager, cid: int):
 
 def create_database(manager: MetabaseAPIManager):
     clear_screen()
-    print("🆕 Create a new database connection")
+    print('🆕 Create a new database connection')
 
-    name = input_str("Enter database name: ", required=True)
-    engine = input_str("Enter database engine (e.g., bigquery-cloud-sdk, postgres, mysql): ", required=True)
+    name = input_str('Enter database name: ', required=True)
+    engine = input_str(
+        'Enter database engine (e.g., bigquery-cloud-sdk, postgres, mysql): ',
+        required=True)
 
     details = {}
-    if engine == "bigquery-cloud-sdk":
-        project_id = input_str("Enter BigQuery project_id: ", required=True)
-        dataset_id = input_str("Enter BigQuery dataset_id: ", required=True)
-        details = manager.database.create_bigquery_details(project_id=project_id, dataset_id=dataset_id)
+    if engine == 'bigquery-cloud-sdk':
+        project_id = input_str('Enter BigQuery project_id: ', required=True)
+        dataset_id = input_str('Enter BigQuery dataset_id: ', required=True)
+        details = manager.database.create_bigquery_details(
+            project_id=project_id, dataset_id=dataset_id)
     else:
-        print(f"{engine} will support soon.")
-    
-    is_full_sync = input_yes_no("Enable full schema sync? ")
-    auto_run_queries = input_yes_no("Enable auto run queries?")
-    is_on_demand = input_yes_no("Is on-demand connection?")
-    cache_ttl = input_int("Cache TTL (minutes), or leave blank for default (1): ", allow_empty=True)
-    if cache_ttl is None:
-        cache_ttl = 1
-    connection_source = input_str("Connection source ('admin' or 'setup'), or leave blank for default (admin): ", required=True)
+        print(f'{engine} will support soon.')
 
-    def input_schedule(name):
-        print(f"\nEnter {name} schedule:")
-        schedule_type = input_str("  schedule_type (hourly, daily, weekly, monthly): ", required=True)
-        schedule_hour = input_int("  schedule_hour (0-23): ")
-        schedule_minute = input_int("  schedule_minute (0-59): ")
-        schedule_day = input_str("  schedule_day (sun, mon, tue, wed, thu, fri, sat): ")
-        schedule_frame = input_str("  schedule_frame (first, mid, last): ")
-        return {
-            "schedule_type": schedule_type,
-            "schedule_hour": schedule_hour,
-            "schedule_minute": schedule_minute,
-            "schedule_day": schedule_day,
-            "schedule_frame": schedule_frame,
+    is_full_sync = input_yes_no('Enable full schema sync? ')
+    auto_run_queries = input_yes_no('Enable auto run queries?')
+    is_on_demand = input_yes_no('Is on-demand connection?')
+    # cache_ttl = input_int("Cache TTL (minutes), or leave blank for default (1): ", allow_empty=True)
+    # if cache_ttl is None:
+    #     cache_ttl = 1
+    connection_source = input_str(
+        "Connection source ('admin' or 'setup'), or leave blank for default (admin): ",
+        required=False)
+    if not connection_source:
+        connection_source = 'admin'
+
+    def input_schedule(name: str) -> dict:
+        """
+        Ask the user to input schedule configuration for Metabase database creation.
+        If the user prefers, they can use default values instead of manual input.
+        """
+
+        # 🧩 Default values
+        default_schedule = {
+            'schedule_type': 'daily',
+            'schedule_hour': 0,
+            'schedule_minute': 0,
+            'schedule_day': 'sun',
+            'schedule_frame': 'first',
         }
-    
-    cache_schedule = input_schedule("cache_field_values")
-    metadata_schedule = input_schedule("metadata_sync")
+
+        print(f'\n🕒 Enter {name} schedule configuration:')
+        print('   Default values:')
+        for k, v in default_schedule.items():
+            print(f'     - {k}: {v}')
+
+        use_default = input_yes_no('Use default schedule?')
+        if use_default:
+            print(f'✅ Using default schedule for {name}.')
+            return default_schedule
+
+        # 🧠 Manual input
+        from src.utils.input_utils import input_int, input_str
+
+        schedule_type = input_str(
+            '  schedule_type (hourly, daily, weekly, monthly): ',
+            default=default_schedule['schedule_type'])
+        schedule_hour = input_int('  schedule_hour (0-23): ',
+                                  default=default_schedule['schedule_hour'])
+        schedule_minute = input_int(
+            '  schedule_minute (0-59): ',
+            default=default_schedule['schedule_minute'])
+        schedule_day = input_str(
+            '  schedule_day (sun, mon, tue, wed, thu, fri, sat): ',
+            default=default_schedule['schedule_day'])
+        schedule_frame = input_str('  schedule_frame (first, mid, last): ',
+                                   default=default_schedule['schedule_frame'])
+
+        return {
+            'schedule_type': schedule_type,
+            'schedule_hour': schedule_hour,
+            'schedule_minute': schedule_minute,
+            'schedule_day': schedule_day,
+            'schedule_frame': schedule_frame,
+        }
+
+    cache_schedule = input_schedule('cache_field_values')
+    metadata_schedule = input_schedule('metadata_sync')
 
     payload = manager.database.build_database_payload(
         name=name,
@@ -70,17 +112,16 @@ def create_database(manager: MetabaseAPIManager):
         is_full_sync=is_full_sync,
         auto_run_queries=auto_run_queries,
         is_on_demand=is_on_demand,
-        cache_ttl=cache_ttl,
+        # cache_ttl=cache_ttl,
         connection_source=connection_source,
         cache_schedule=cache_schedule,
-        metadata_schedule=metadata_schedule
-    )
+        metadata_schedule=metadata_schedule)
 
-    Path("debug").mkdir(exist_ok=True)
-    with open("debug/payload_preview.json", "w", encoding="utf-8") as f:
+    Path('debug').mkdir(exist_ok=True)
+    with open('debug/payload_preview.json', 'w', encoding='utf-8') as f:
         json.dump(payload, f, ensure_ascii=False, indent=4)
 
-    print("\nSending create database request...")
+    print('\nSending create database request...')
     response = manager.database._post(
         url=manager.database.get_self_url(),
         json_data=payload,
@@ -89,8 +130,8 @@ def create_database(manager: MetabaseAPIManager):
     if response.status_code < 400:
         print(f"✅ Database '{name}' created successfully!")
     else:
-        print(f"❌ Failed to create database. Status: {response.status_code}")
-        print(f"Response: {response.text}")
+        print(f'❌ Failed to create database. Status: {response.status_code}')
+        print(f'Response: {response.text}')
 
     input('🔙 Press Enter to return...')
 
@@ -108,15 +149,22 @@ def update_database(manager: MetabaseAPIManager):
 
 
 def delete_database(manager: MetabaseAPIManager):
-    cid = input_int("Enter database ID to delete (or 'q' to cancel): ")
-    if cid is None:
+    did = input_int("Enter database ID to delete (or 'q' to cancel): ")
+    if did is None:
         print('Delete cancelled.')
         input('🔙 Press Enter to return...')
         return
 
-    confirm = input_yes_no(f'Are you sure you want to delete database ID {cid}?')
+    confirm = input_yes_no(
+        f'Are you sure you want to delete database ID {did}?')
     if confirm:
-        pass
+        res = manager.database.delete_specific_database(did)
+        if res.status_code < 400:
+            print(f'database ID {did} deleted successfully.')
+        else:
+            print(
+                f'Failed to delete database ID {did}. Status code: {res.status_code}'
+            )
     else:
         print('Delete cancelled.')
 
