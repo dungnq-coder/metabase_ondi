@@ -7,6 +7,69 @@ from src.utils.print_permissions import *
 from src.utils.screen_contact import clear_screen
 
 
+def assign_members_to_group(manager: MetabaseAPIManager,
+                            group_id: int,
+                            user_id: int,
+                            is_group_manager: bool = False):
+    payload = {
+        'group_id': group_id,
+        'is_group_manager': is_group_manager,
+        'user_id': user_id
+    }
+    res = manager.permissions.post_permissions_action(action='membership',
+                                                      payload=payload)
+
+    if res.status_code < 400:
+        print(f'Add user {user_id} into group {group_id} successfully!')
+    else:
+        print(f'FAILED to add user {user_id} into group {group_id}.')
+
+
+def assign_permissions_to_dbs(manager: MetabaseAPIManager, group_id: str,
+                              template_dbs: dict,
+                              present_permission: dict) -> dict:
+    """
+    Tạo hoặc chỉnh quyền cho các database dựa trên template_dbs.
+    Cập nhật trực tiếp vào present_permission và gọi API luôn.
+    """
+    if not template_dbs:
+        print('⚠️ No template databases found. Cannot proceed.')
+        return {}
+
+    print('\n=== Available Databases ===')
+    for db_id in template_dbs:
+        print(f'- Database ID: {db_id}')
+
+    db_ids_input = input_str(
+        '\nEnter one or more database_id to add/update permissions (comma separated): ',
+        required=True)
+    db_ids = [
+        x.strip() for x in db_ids_input.split(',') if x.strip() in template_dbs
+    ]
+    if not db_ids:
+        print('❌ No valid database IDs selected. Cancelled.')
+        return {}
+
+    new_group_permissions = {}
+    for db_id in db_ids:
+        print(f'\n--- Configure permissions for Database {db_id} ---')
+        new_group_permissions[db_id] = edit_permissions(template_dbs[db_id])
+
+    # --- Cập nhật vào present_permission và gọi API ---
+    present_permission['groups'][group_id] = new_group_permissions
+    response = manager.permissions.update_premissions(
+        payload=present_permission)
+
+    if response.status_code < 400:
+        print(f'✅ Permissions for group {group_id} updated successfully.')
+    else:
+        print(
+            f'❌ Failed to update permissions. Status code: {response.status_code}'
+        )
+
+    return new_group_permissions
+
+
 def list_permissions_group(manager: MetabaseAPIManager):
     permissions = manager.permissions.get_permissions_detail(
         extra='group').json()
@@ -86,7 +149,6 @@ def edit_permissions(current_permissions: dict) -> dict:
                 print('⚠️ Invalid option. Keeping current value.')
             new_permissions[key] = value
         else:
-            # Chuyển dạng {'schemas': 'full'} cho download/data-model
             if key in ['download', 'data-model']:
                 schema_val = new_val.split(':')[-1]
                 new_permissions[key] = {'schemas': schema_val}
@@ -99,6 +161,8 @@ def edit_permissions(current_permissions: dict) -> dict:
 def create_permissions(manager: MetabaseAPIManager):
     clear_screen()
     print('🆕 Create a new permissions group')
+
+    # --- Nhập tên group ---
     name = input_str('Enter permissions group name: ', required=True)
 
     # --- Tạo group mới ---
@@ -118,43 +182,38 @@ def create_permissions(manager: MetabaseAPIManager):
     # --- Lấy template DB từ Admin group ---
     present_permission = manager.permissions.get_permissions_detail(
         extra='graph').json()
-    admin_dbs = present_permission['groups'].get('2', {})
+    admin_dbs = present_permission['groups'].get('2', {})  # admin group ID = 2
     if not admin_dbs:
         print('⚠️ Administrator group has no databases. Cannot proceed.')
         input('🔙 Press Enter to return...')
         return
 
-    print('\n=== Available Databases ===')
-    for db_id in admin_dbs:
-        print(f'- Database ID: {db_id}')
+    # --- Chỉnh quyền cho các database bằng hàm assign_permissions_to_dbs (cập nhật trực tiếp) ---
+    assign_permissions_to_dbs(manager, new_group_id, admin_dbs,
+                              present_permission)
 
-    db_ids_input = input_str(
-        '\nEnter one or more database_id to add permissions (comma separated): ',
-        required=True)
-    db_ids = [
-        x.strip() for x in db_ids_input.split(',') if x.strip() in admin_dbs
-    ]
-    if not db_ids:
-        print('❌ No valid database IDs selected. Cancelled.')
-        input('🔙 Press Enter to return...')
-        return
+    # --- Thêm members vào group ---
+    all_member = manager.permissions.get_permissions_detail(extra='group',
+                                                            group_id=1)
+    print('Current all member: ')
+    print_group_members_tree(all_member.json())
+    members = input(
+        'Enter user_id to add permissions (comma separated, leave blank to skip): '
+    ).strip()
 
-    # --- Chỉnh quyền cho từng database ---
-    new_group_permissions = {
-        db_id: edit_permissions(admin_dbs[db_id])
-        for db_id in db_ids
-    }
-
-    # --- Cập nhật payload và tạo permissions ---
-    present_permission['groups'][new_group_id] = new_group_permissions
-    response = manager.permissions.update_premissions(
-        payload=present_permission)
-    if response.status_code < 400:
-        print(f'✅ Permissions group "{name}" created successfully.')
-    else:
-        print(
-            f'❌ Failed to create permissions. Status code: {response.status_code}'
-        )
+    if members:
+        user_id_list = []
+        for u in members.split(','):
+            u = u.strip()
+            if u.isdigit():
+                user_id_list.append(int(u))
+            else:
+                print(f"⚠️ Invalid user ID '{u}' skipped.")
+        if user_id_list:
+            for user_id in user_id_list:
+                assign_members_to_group(manager=manager,
+                                        group_id=new_group_id,
+                                        user_id=user_id)
 
     input('🔙 Press Enter to return...')
 
@@ -173,44 +232,14 @@ def update_permissions(manager: MetabaseAPIManager):
     for gid in groups.keys():
         print(f'- Group ID: {gid}')
     gid = input_str("\nEnter group_id to update (or 'q' to cancel): ")
-
     if gid not in groups:
         print('❌ Invalid group ID. Operation cancelled.')
         input('🔙 Press Enter to return...')
         return
 
-    dbs = groups[gid]
-    print('\n=== Databases for this group ===')
-    for db_id in dbs.keys():
-        print(f'- Database ID: {db_id}')
-
-    db_ids_input = input_str(
-        '\nEnter one or more database_id (comma separated): ')
-    if not db_ids_input:
-        print('❌ No database selected. Cancelled.')
-        input('🔙 Press Enter to return...')
-        return
-
-    db_ids = [x.strip() for x in db_ids_input.split(',') if x.strip() in dbs]
-    if not db_ids:
-        print('❌ No valid database IDs selected. Cancelled.')
-        input('🔙 Press Enter to return...')
-        return
-
-    for db_id in db_ids:
-        print(f'\n=== Updating permissions for Database {db_id} ===')
-        dbs[db_id] = edit_permissions(dbs[db_id])
-
-    present_permission['groups'][gid] = dbs
-    response = manager.permissions.update_premissions(
-        payload=present_permission)
-
-    if response.status_code < 400:
-        print('✅ Permissions updated successfully.')
-    else:
-        print(
-            f'❌ Failed to update permissions. Status code: {response.status_code}'
-        )
+    # --- Sử dụng assign_permissions_to_dbs để chỉnh quyền DB và update trực tiếp ---
+    print(f'\n--- Updating permissions for group {gid} ---')
+    assign_permissions_to_dbs(manager, gid, groups[gid], present_permission)
 
     input('🔙 Press Enter to return...')
 

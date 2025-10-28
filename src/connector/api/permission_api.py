@@ -78,6 +78,7 @@ class PermissionsAPI(Base):
         General method to perform POST actions on a permissions.
         Examples of `action`:
             - 'group'
+            - 'membership'
         """
 
         response = self._post(url=self.get_url(extra_path=action),
