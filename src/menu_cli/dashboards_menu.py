@@ -1,10 +1,19 @@
 from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import input_int, input_str, input_yes_no
-from src.utils.process_response_data import *
+from src.utils.print_dashboards import *
 from src.utils.screen_contact import clear_screen
 
 
 def list_dashboards(manager: MetabaseAPIManager):
+    """
+    Display a list of all dashboards.
+
+    Fetches all dashboards using the Metabase API manager and prints
+    them in a formatted list.
+
+    Args:
+        manager (MetabaseAPIManager): The Metabase API manager instance.
+    """
     dashboards = manager.dashboard.list_all_dashboards()
     clear_screen()
     print('📊 All Dashboards')
@@ -13,6 +22,13 @@ def list_dashboards(manager: MetabaseAPIManager):
 
 
 def view_dashboard(manager: MetabaseAPIManager, did: int):
+    """
+    Display details for a specific dashboard.
+
+    Args:
+        manager (MetabaseAPIManager): The Metabase API manager instance.
+        did (int): The ID of the dashboard to view.
+    """
     dash = manager.dashboard.get_dashboard_detail(did)
     clear_screen()
     print_dashboard_details(dash)
@@ -20,6 +36,22 @@ def view_dashboard(manager: MetabaseAPIManager, did: int):
 
 
 def create_dashboard(manager: MetabaseAPIManager):
+    """
+    Create a new dashboard or copy an existing one.
+
+    The user can choose to:
+    - Copy an existing dashboard by providing its template ID.
+    - Create a new dashboard (currently in development).
+
+    If copying, the user can configure:
+    - Target collection ID
+    - Dashboard name
+    - Collection order
+    - Deep copy option
+
+    Args:
+        manager (MetabaseAPIManager): The Metabase API manager instance.
+    """
     action = input_str(
         "Enter dashboard template id to create a copy dashboard or press Enter to create a new dashboard (or 'q' to cancel): ",
         required=False,
@@ -80,6 +112,12 @@ def create_dashboard(manager: MetabaseAPIManager):
 
 
 def update_dashboard(manager: MetabaseAPIManager):
+    """
+    Update an existing dashboard (currently placeholder).
+
+    Args:
+        manager (MetabaseAPIManager): The Metabase API manager instance.
+    """
     did = input_int("Enter dashboard ID to update (or 'q' to cancel): ")
     if did is None:
         print('Update cancelled.')
@@ -90,6 +128,14 @@ def update_dashboard(manager: MetabaseAPIManager):
 
 
 def delete_dashboard(manager: MetabaseAPIManager):
+    """
+    Delete a dashboard by its ID.
+
+    Prompts the user for confirmation before deletion.
+
+    Args:
+        manager (MetabaseAPIManager): The Metabase API manager instance.
+    """
     did = input_int("Enter dashboard ID to delete (or 'q' to cancel): ")
     if did is None:
         print('Delete cancelled.')
@@ -113,6 +159,19 @@ def delete_dashboard(manager: MetabaseAPIManager):
 
 
 def dashboard_menu(manager: MetabaseAPIManager):
+    """
+    Display the main interactive menu for managing dashboards.
+
+    This menu allows the user to:
+    - List all dashboards
+    - View a dashboard by ID
+    - Create or copy a dashboard
+    - Update an existing dashboard
+    - Delete a dashboard
+
+    Args:
+        manager (MetabaseAPIManager): The Metabase API manager instance.
+    """
     while True:
         list_dashboards(manager)
 

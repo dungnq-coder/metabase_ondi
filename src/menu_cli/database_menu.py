@@ -5,7 +5,7 @@ from pprint import pprint
 from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import (get_multiline_input, input_int, input_str,
                                    input_yes_no)
-from src.utils.process_response_data import *
+from src.utils.print_databases import *
 from src.utils.screen_contact import clear_screen
 
 
@@ -34,8 +34,10 @@ def create_database(manager: MetabaseAPIManager):
     details = {}
     if engine == 'bigquery-cloud-sdk':
         project_id = input_str('Enter BigQuery project_id: ', required=True)
+        dataset_id = input_str('Enter BigQuery dataset_id or q to skip: ',
+                               required=False)
         details = manager.database.create_bigquery_details(
-            project_id=project_id)
+            project_id=project_id, dataset_id=dataset_id)
     else:
         print(
             f'⚠️  Engine "{engine}" is not supported yet. Please try again later.'

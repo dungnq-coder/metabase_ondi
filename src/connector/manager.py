@@ -2,6 +2,7 @@ from src.connector.api.card_api import CardAPI
 from src.connector.api.collection_api import CollectionAPI
 from src.connector.api.dashboard_api import DashboardAPI
 from src.connector.api.database_api import DatabaseAPI
+from src.connector.api.permission_api import PermissionsAPI
 
 
 class MetabaseAPIManager:
@@ -70,3 +71,8 @@ class MetabaseAPIManager:
     def database(self) -> DatabaseAPI:
         """API client for Metabase databases."""
         return self._get_client(DatabaseAPI, 'database')
+
+    @property
+    def permissions(self) -> PermissionsAPI:
+        """API client for Metabase permissions."""
+        return self._get_client(PermissionsAPI, 'permissions')

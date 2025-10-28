@@ -3,7 +3,7 @@ from pprint import pprint
 from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import (get_multiline_input, input_int, input_str,
                                    input_yes_no)
-from src.utils.process_response_data import *
+from src.utils.print_cards import *
 from src.utils.screen_contact import clear_screen
 
 

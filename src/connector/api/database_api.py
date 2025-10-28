@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from pprint import pprint
 
 from core.base_config import BaseConfig
 from src.connector.api.base_api_class import Base
@@ -123,7 +124,9 @@ class DatabaseAPI(Base):
 
         return payload
 
-    def create_bigquery_details(self, project_id: str) -> dict:
+    def create_bigquery_details(self,
+                                project_id: str,
+                                dataset_id: str = None) -> dict:
         """
         Create 'details' part for BigQuery database payload.
         """
@@ -138,8 +141,12 @@ class DatabaseAPI(Base):
             sa_json = f.read()
 
         return {
-            'project-id': project_id,
-            'service-account-json': sa_json,
+            k: v
+            for k, v in {
+                'project-id': project_id,
+                'dataset-id': dataset_id,
+                'service-account-json': sa_json,
+            }.items() if v is not None
         }
 
     def create_schedule(self,

@@ -4,6 +4,7 @@ from src.menu_cli.cards_menu import card_menu
 from src.menu_cli.collections_menu import collection_menu
 from src.menu_cli.dashboards_menu import dashboard_menu
 from src.menu_cli.database_menu import database_menu
+from src.menu_cli.permission_menu import permissions_menu
 from src.utils.screen_contact import clear_screen
 
 
@@ -22,9 +23,10 @@ def run_cli():
                                  base_url=config.base_url)
 
     while True:
-        choice = show_menu(
-            '📦 Metabase CLI Tool',
-            ['Collections', 'Dashboards', 'Cards', 'Database', 'Exit'])
+        choice = show_menu('📦 Metabase CLI Tool', [
+            'Collections', 'Dashboards', 'Cards', 'Database', 'Permission',
+            'Exit'
+        ])
         if choice == '1':
             collection_menu(manager)
         elif choice == '2':
@@ -34,6 +36,8 @@ def run_cli():
         elif choice == '4':
             database_menu(manager)
         elif choice == '5':
+            permissions_menu(manager)
+        elif choice == '6':
             print('👋 Exiting Metabase CLI. Goodbye!')
             break
         else:
