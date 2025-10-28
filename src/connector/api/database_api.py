@@ -29,8 +29,7 @@ class DatabaseAPI(Base):
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
 
-        response = self._get(
-            url=self.get_url(database_id, extra_path=extra)).json()
+        response = self._get(url=self.get_url(database_id, extra_path=extra))
 
         self.set_self_url(original_url)
         return response
@@ -144,7 +143,8 @@ class DatabaseAPI(Base):
             k: v
             for k, v in {
                 'project-id': project_id,
-                'dataset-id': dataset_id,
+                'dataset-filters-type': 'inclusion',
+                'dataset-filters-patterns': dataset_id,
                 'service-account-json': sa_json,
             }.items() if v is not None
         }

@@ -12,7 +12,10 @@ class PermissionsAPI(Base):
         super().__init__(api_token)
         self._api_url = url
 
-    def get_permissions_detail(self, permissions_id: int = None, extra: str = None, **kwargs):
+    def get_permissions_detail(self,
+                               permissions_id: int = None,
+                               extra: str = None,
+                               **kwargs):
         """
         General method to get permissions-related details.
 
@@ -48,12 +51,13 @@ class PermissionsAPI(Base):
 
         # --- Case 2 & 3: permission_id None
         else:
-            group_id = kwargs.get("group_id")
-            member_id = kwargs.get("member_id")
+            group_id = kwargs.get('group_id')
+            member_id = kwargs.get('member_id')
+            database_id = kwargs.get('database_id')
 
             # Case 3: /permissions/{extra}/{group_id or member_id}
-            if group_id is not None or member_id is not None:
-                sub_id = group_id or member_id
+            if group_id is not None or member_id is not None or database_id is not None:
+                sub_id = group_id or member_id or database_id
                 # set_self_url để format {id} sau extra
                 self.set_self_url(f"{self._api_url.rstrip('/')}/{extra}/{{}}")
                 target_url = self.get_url(sub_id)
@@ -69,12 +73,10 @@ class PermissionsAPI(Base):
         self.set_self_url(original_url)
         return response
 
-
-
     def post_permissions_action(self,
-                             permissions_id: int,
-                             action: str,
-                             payload: dict = None):
+                                permissions_id: int,
+                                action: str,
+                                payload: dict = None):
         """
         General method to perform POST actions on a permissions.
         Examples of `action`:
@@ -83,12 +85,18 @@ class PermissionsAPI(Base):
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
 
-        response = self._post(url=self.get_url(permissions_id, extra_path=action),
+        response = self._post(url=self.get_url(permissions_id,
+                                               extra_path=action),
                               json_data=payload or {})
 
         self.set_self_url(original_url)
         return response
 
+    def update_premissions(self, payload: dict):
+        """Update premissions."""
+        response = self._put(url=self.get_url(extra_path='graph'),
+                             json_data=payload or {})
+        return response
 
     def delete_specific_permissions(self, permissions_id: int):
         """Delete specific permissions by ID."""

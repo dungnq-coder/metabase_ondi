@@ -16,7 +16,7 @@ def list_databases(manager: MetabaseAPIManager):
 
 
 def view_database(manager: MetabaseAPIManager, cid: int):
-    database = manager.database.get_database_detail(cid)
+    database = manager.database.get_database_detail(cid).json()
     clear_screen()
     print_database_details(database)
     input('🔙 Press Enter to return...')
@@ -34,8 +34,9 @@ def create_database(manager: MetabaseAPIManager):
     details = {}
     if engine == 'bigquery-cloud-sdk':
         project_id = input_str('Enter BigQuery project_id: ', required=True)
-        dataset_id = input_str('Enter BigQuery dataset_id or q to skip: ',
-                               required=False)
+        dataset_id = input_str(
+            'Enter BigQuery dataset_id (seperate by comma) or q to skip: ',
+            required=False)
         details = manager.database.create_bigquery_details(
             project_id=project_id, dataset_id=dataset_id)
     else:
@@ -140,13 +141,107 @@ def create_database(manager: MetabaseAPIManager):
 
 def update_database(manager: MetabaseAPIManager):
     cid = input_int("Enter database ID to update (or 'q' to cancel): ")
+
     if cid is None:
         print('Update cancelled.')
         input('🔙 Press Enter to return...')
         return
-    response = None
+
+    # Lấy dữ liệu hiện tại
+    db_info = manager.database.get_database_detail(cid).json()
+
+    print('\n📝 Leave blank to keep current value.\n')
+
+    # Cập nhật các trường cơ bản
+    name = input(f"Database name (current: {db_info.get('name')}): ").strip(
+    ) or db_info.get('name')
+    is_full_sync = input_yes_no(
+        f"Enable full schema sync? (current: {db_info.get('is_full_sync')})")
+    auto_run_queries = input_yes_no(
+        f"Enable auto run queries? (current: {db_info.get('auto_run_queries')})"
+    )
+    is_on_demand = input_yes_no(
+        f"Is on-demand connection? (current: {db_info.get('is_on_demand')})")
+
+    # Cập nhật schedules
+    def update_schedule(schedule_name, current_schedule):
+        print(f'\nUpdate schedule for {schedule_name}:')
+        schedule_type = input(
+            f"  schedule_type (hourly/daily/weekly/monthly, current: {current_schedule.get('schedule_type')}): "
+        ).strip() or current_schedule.get('schedule_type')
+        schedule_hour = input_int(
+            f"  schedule_hour (0-23, current: {current_schedule.get('schedule_hour')}): ",
+            allow_empty=True)
+        schedule_minute = input_int(
+            f"  schedule_minute (0-59, current: {current_schedule.get('schedule_minute')}): ",
+            allow_empty=True)
+        schedule_day = input(
+            f"  schedule_day (sun-mon, current: {current_schedule.get('schedule_day')}): "
+        ).strip() or current_schedule.get('schedule_day')
+        schedule_frame = input(
+            f"  schedule_frame (first/mid/last, current: {current_schedule.get('schedule_frame')}): "
+        ).strip() or current_schedule.get('schedule_frame')
+
+        return {
+            'schedule_type':
+            schedule_type,
+            'schedule_hour':
+            schedule_hour if schedule_hour is not None else
+            current_schedule.get('schedule_hour'),
+            'schedule_minute':
+            schedule_minute if schedule_minute is not None else
+            current_schedule.get('schedule_minute'),
+            'schedule_day':
+            schedule_day,
+            'schedule_frame':
+            schedule_frame
+        }
+
+    schedules = db_info.get('schedules', {})
+    metadata_schedule = update_schedule('metadata_sync',
+                                        schedules.get('metadata_sync', {}))
+    cache_schedule = update_schedule('cache_field_values',
+                                     schedules.get('cache_field_values', {}))
+
+    # Cập nhật details cho BigQuery
+    details = db_info.get('details', {})
+    if db_info.get('engine') == 'bigquery-cloud-sdk':
+        print('\nUpdate BigQuery details:')
+        project_id = input(
+            f"  project-id (current: {details.get('project-id')}): ").strip(
+            ) or details.get('project-id')
+        dataset_id = input(
+            f"  dataset-filters-patterns (current: {details.get('dataset-filters-patterns')}): "
+        ).strip() or details.get('dataset-filters-patterns')
+        # Sử dụng hàm helper để build lại details
+        details = manager.database.create_bigquery_details(
+            project_id, dataset_id)
+
+    # Build payload
+    payload = {
+        'name': name,
+        'engine': db_info.get('engine'),
+        'is_full_sync': is_full_sync,
+        'auto_run_queries': auto_run_queries,
+        'is_on_demand': is_on_demand,
+        'schedules': {
+            'metadata_sync': metadata_schedule,
+            'cache_field_values': cache_schedule
+        },
+        'details': details,
+        'cache_ttl': db_info.get('cache_ttl'),
+        'refingerprint': db_info.get('refingerprint'),
+        'is_sample': db_info.get('is_sample')
+    }
+
+    response = manager.database._put(
+        url=f'{manager.database.get_self_url()}{cid}', json_data=payload)
+
     if response.status_code < 400:
-        print(f'database ID {cid} updated successfully.')
+        print(f"✅ Database '{name}' updated successfully!")
+    else:
+        print(f'❌ Failed to update database. Status: {response.status_code}')
+
     input('🔙 Press Enter to return...')
 
 

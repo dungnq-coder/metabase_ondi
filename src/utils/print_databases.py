@@ -1,6 +1,7 @@
 # src/utils/print_databases.py
-from .icons import icon_bool
 from .format_time import format_time
+from .icons import icon_bool
+
 
 def print_databases_list(data: dict):
     """

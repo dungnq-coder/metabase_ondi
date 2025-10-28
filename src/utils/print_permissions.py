@@ -1,6 +1,6 @@
 def print_permissions_list(data: dict):
     if not data or 'groups' not in data:
-        print("No permission data found.")
+        print('No permission data found.')
         return
 
     revision = data.get('revision', 'N/A')
@@ -9,22 +9,23 @@ def print_permissions_list(data: dict):
     print(f"\nData Permissions (Revision: {revision})\n{'='*80}")
 
     for g_idx, (group_id, dbs) in enumerate(groups.items()):
-        print(f"Group {group_id} [ID: {group_id}]")
+        print(f'Group {group_id} [ID: {group_id}]')
         if not dbs:
-            print("  No databases assigned.")
+            print('  No databases assigned.')
             continue
 
         db_keys = list(dbs.keys())
         for idx_db, db_id in enumerate(db_keys):
             perms = dbs[db_id]
             is_last_db = idx_db == len(db_keys) - 1
-            db_branch = "└─" if is_last_db else "├─"
-            sub_branch = "   " if is_last_db else "│  "
+            db_branch = '└─' if is_last_db else '├─'
+            sub_branch = '   ' if is_last_db else '│  '
 
-            print(f"{db_branch} Database {db_id} [ID: {db_id}]")
+            print(f'{db_branch} Database {db_id} [ID: {db_id}]')
 
             # Extract permissions
-            can_query = 'query-builder-and-native' in perms.get('create-queries', '')
+            can_query = 'query-builder-and-native' in perms.get(
+                'create-queries', '')
             view_data = perms.get('view-data', '')
             download = perms.get('download', {}).get('schemas', '')
             data_model = perms.get('data-model', {}).get('schemas', '')
@@ -38,15 +39,16 @@ def print_permissions_list(data: dict):
             details_text = 'Yes' if details == 'yes' else 'No'
 
             # Print permission details under database
-            print(f"{sub_branch}├─ Query Permission: {query_text}")
-            print(f"{sub_branch}├─ View Data:       {view_text}")
-            print(f"{sub_branch}├─ Download:        {download_text}")
-            print(f"{sub_branch}├─ Edit Model:      {model_text}")
-            print(f"{sub_branch}└─ DB Details:      {details_text}")
+            print(f'{sub_branch}├─ Query Permission: {query_text}')
+            print(f'{sub_branch}├─ View Data:       {view_text}')
+            print(f'{sub_branch}├─ Download:        {download_text}')
+            print(f'{sub_branch}├─ Edit Model:      {model_text}')
+            print(f'{sub_branch}└─ DB Details:      {details_text}')
 
         if g_idx < len(groups) - 1:
-            print('='*40)
-    print('='*80)
+            print('=' * 40)
+    print('=' * 80)
+
 
 def print_group_members_tree(group_data: dict):
     """
@@ -126,29 +128,84 @@ def print_groups_list(groups: list):
         ]
     """
     if not groups:
-        print("No group data available.")
+        print('No group data available.')
         return
 
-    print("\nUser Groups Overview")
-    print("=" * 60)
+    print('\nUser Groups Overview')
+    print('=' * 60)
 
     for idx, group in enumerate(groups):
         is_last = idx == len(groups) - 1
-        branch = "└─" if is_last else "├─"
-        sub_branch = "   " if is_last else "│  "
+        branch = '└─' if is_last else '├─'
+        sub_branch = '   ' if is_last else '│  '
 
-        name = group.get("name", "Unnamed Group")
-        gid = group.get("id", "N/A")
-        members = group.get("member_count", 0)
-        magic_type = group.get("magic_group_type", "None")
-        tenant = "Yes" if group.get("is_tenant_group") else "No"
-        entity_id = group.get("entity_id", None)
+        name = group.get('name', 'Unnamed Group')
+        gid = group.get('id', 'N/A')
+        members = group.get('member_count', 0)
+        magic_type = group.get('magic_group_type', 'None')
+        tenant = 'Yes' if group.get('is_tenant_group') else 'No'
+        entity_id = group.get('entity_id', None)
 
-        print(f"{branch} {name} [ID: {gid}]")
-        print(f"{sub_branch} Members:        {members}")
-        print(f"{sub_branch} Magic Type:     {magic_type}")
-        print(f"{sub_branch} Tenant Group:   {tenant}")
+        print(f'{branch} {name} [ID: {gid}]')
+        print(f'{sub_branch} Members:        {members}')
+        print(f'{sub_branch} Magic Type:     {magic_type}')
+        print(f'{sub_branch} Tenant Group:   {tenant}')
         if entity_id:
-            print(f"{sub_branch} Entity ID:      {entity_id}")
+            print(f'{sub_branch} Entity ID:      {entity_id}')
 
-    print("=" * 60)
+    print('=' * 60)
+
+
+def print_db_permission_detail(data: dict):
+    """
+    Display detailed database permissions for all groups in a formatted and readable way.
+
+    Args:
+        data (dict): The permissions data returned from the Metabase API.
+
+    Example structure:
+        {
+            "revision": 2,
+            "groups": {
+                "1": {
+                    "1": {
+                        "view-data": "unrestricted",
+                        "download": {"schemas": "full"},
+                        "create-queries": "query-builder-and-native"
+                    }
+                }
+            }
+        }
+    """
+    print('🔐 === DATABASE PERMISSIONS DETAIL ===\n')
+
+    if not data or 'groups' not in data:
+        print('⚠️  No permission data found.')
+        return
+
+    groups = data.get('groups', {})
+    print(f"🧾 Revision: {data.get('revision', 'N/A')}\n")
+
+    # --- Iterate through groups ---
+    for group_id, dbs in groups.items():
+        print(f'👥 Group ID: {group_id}')
+        print('   ├── Databases:')
+
+        # --- Iterate through databases under this group ---
+        for db_id, perms in dbs.items():
+            print(f'   │   🗄️  Database ID: {db_id}')
+
+            # --- Print each permission key and its value ---
+            for key, value in perms.items():
+                if isinstance(value, dict):
+                    # Example: "download": {"schemas": "full"}
+                    nested = ', '.join(f'{k}: {v}' for k, v in value.items())
+                    print(f'   │       - {key}: {nested}')
+                else:
+                    print(f'   │       - {key}: {value}')
+
+            print('   │')  # visual separator between databases
+
+        print('   └── End of group\n')
+
+    print('✅ End of permissions list.\n')

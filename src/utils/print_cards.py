@@ -1,7 +1,8 @@
 # src/utils/print_cards.py
-from .icons import icon_display, icon_bool
 from .format_time import format_time
+from .icons import icon_bool, icon_display
 from .permissions import format_permissions
+
 
 def print_card_details(data: dict):
     if not data:

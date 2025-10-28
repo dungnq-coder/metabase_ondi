@@ -20,5 +20,6 @@ def icon_display(display_type):
         'map': '🗺️',
     }.get(display_type, '📄')
 
+
 def icon_bool(val):
     return '✅' if val else '❌'
