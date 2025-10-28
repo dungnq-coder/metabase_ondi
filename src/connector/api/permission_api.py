@@ -73,23 +73,16 @@ class PermissionsAPI(Base):
         self.set_self_url(original_url)
         return response
 
-    def post_permissions_action(self,
-                                permissions_id: int,
-                                action: str,
-                                payload: dict = None):
+    def post_permissions_action(self, action: str, payload: dict = None):
         """
         General method to perform POST actions on a permissions.
         Examples of `action`:
-            - 'validate'
+            - 'group'
         """
-        original_url = self.get_self_url()
-        self.set_self_url(self.get_param_url())
 
-        response = self._post(url=self.get_url(permissions_id,
-                                               extra_path=action),
+        response = self._post(url=self.get_url(extra_path=action),
                               json_data=payload or {})
 
-        self.set_self_url(original_url)
         return response
 
     def update_premissions(self, payload: dict):
@@ -101,7 +94,17 @@ class PermissionsAPI(Base):
     def delete_specific_permissions(self, permissions_id: int):
         """Delete specific permissions by ID."""
         original_url = self.get_self_url()
+        self.set_self_url(self.get_url(extra_path='group'))
         self.set_self_url(self.get_param_url())
         response = self._delete(url=self.get_url(permissions_id))
         self.set_self_url(original_url)
         return response
+
+
+if __name__ == '__main__':
+    config = BaseConfig()
+    manager = PermissionsAPI(
+        api_token=config.api_token,
+        url='https://ondi-game.metabaseapp.com/api/permissions')
+    response = manager.get_permissions_detail(extra='group', group_id=1)
+    pprint(response.json())
