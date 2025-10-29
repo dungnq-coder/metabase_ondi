@@ -9,19 +9,28 @@ Follow the steps below to set up your development environment.
 
 ---
 
+## 📚 Table of Contents
+
+1. [Installing `uv`](#-1-installing-uv)
+2. [Setting Up the Virtual Environment](#-2-setting-up-the-virtual-environment)
+3. [Verification](#-3-verification)
+4. [Run the Application](#-4-run-the-application)
+
+---
+
 ## 📦 1. Installing `uv`
 
 `uv` is a high-performance, modern replacement for `pip` and `venv`.
 
-### 🐧 1.1 On Linux & macOS
+### 🐧 1.1 Linux & macOS
 
 Open your terminal and run:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+````
 
-### 🪟 1.2 On Windows (PowerShell / CMD)
+### 🪟 1.2 Windows
 
 #### PowerShell
 
@@ -29,59 +38,65 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 irm https://astral.sh/uv/install.ps1 | iex
 ```
 
-#### Command Prompt (requires `curl`):
-
-```cmd
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-> ⚠️ **Note:** After installation, restart your terminal or ensure the `uv` binary is in your system's `PATH`.
+> ⚠️ After installation, restart your terminal or make sure the `uv` command is available in your `PATH`.
 
 ---
 
 ## 🛠️ 2. Setting Up the Virtual Environment
 
-After installing `uv`, you can create and activate your virtual environment.
+After installing `uv`, create and activate your virtual environment.
 
-### 🐧 2.1 On Linux & macOS
-
-Navigate to your project directory:
+### 🐧 2.1 Linux & macOS
 
 ```bash
-uv venv python=3.11.8
+cd path/to/your/project
+uv venv --python 3.11.8
 source .venv/bin/activate
 uv sync
 ```
 
-### 🪟 2.2 On Windows
+---
 
-Navigate to your project directory, then:
+### 🪟 2.2 Windows
 
-```cmd
-uv venv python=3.11.8
+```powershell
+cd path\to\your\project
+uv venv --python 3.11.8
 ```
 
-#### For CMD:
+Then activate depending on your shell:
 
-```cmd
-.venv\Scripts\activate
-uv sync
-```
-
-#### For PowerShell:
+#### 🟣 PowerShell
 
 ```powershell
 .venv\Scripts\Activate.ps1
 uv sync
 ```
 
+#### ⚫ Command Prompt (CMD)
+
+```cmd
+.venv\Scripts\activate.bat
+uv sync
+```
+
+> 💡 **Tip:** If you get a script execution error in PowerShell, allow script execution:
+>
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
+
 ---
 
 ## ✅ 3. Verification
 
-After activating the environment, your terminal prompt should include the name `.venv`.
+After activation, your terminal prompt should look like:
 
-To verify the Python version:
+```
+(.venv) C:\path\to\project>
+```
+
+Check your Python version:
 
 ```bash
 python --version
@@ -92,13 +107,30 @@ python --version
 ```
 Python 3.11.8
 ```
-## 4. Run
 
-After verify successfully you can run main.py for CLI:
+---
+
+## ▶️ 4. Run the Application
+
+Once the environment is set up and activated:
 
 ```bash
 python main.py
 ```
-Make sure that you in root folder of project.
+
+> Make sure you are in the **root folder** of the project before running.
 
 ---
+
+## 🧩 Notes
+
+* `uv` automatically installs dependencies listed in your `pyproject.toml` or `requirements.txt` when you run `uv sync`.
+* To remove the virtual environment, simply delete the `.venv/` folder.
+* To upgrade dependencies, run:
+
+  ```bash
+  uv sync --upgrade
+  ```
+
+---
+
