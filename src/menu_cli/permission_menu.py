@@ -268,6 +268,52 @@ def delete_permissions(manager: MetabaseAPIManager):
     input('🔙 Press Enter to return...')
 
 
+def action_on_user_permissions(manager: MetabaseAPIManager):
+    while True:
+        clear_screen()
+        all_member = manager.permissions.get_permissions_detail(extra='group',
+                                                                group_id=1)
+        print('Current all member: ')
+        print_group_members_tree(all_member.json())
+        print('-' * 100)
+
+        print('List all group: ')
+        permissions = manager.permissions.get_permissions_detail(
+            extra='group').json()
+        print_groups_list(permissions)
+        print('-' * 100)
+
+        print('Actions:')
+        print('  [a] Add users to group')
+        print('  [d] Remove users from PermissionsGroup')
+        print('  [q] Cancel')
+        action = input('Enter choice: ').strip().lower()
+
+        if action == 'a':
+            group_id = input_int('Enter group id: ')
+            user_ids = input_str(
+                'Enter user id seperate by comma(or leave blank to return): ',
+                required=False).strip()
+            if user_ids is not None:
+                user_id_list = []
+                for u in user_ids.split(','):
+                    u = u.strip()
+                    if u.isdigit():
+                        user_id_list.append(int(u))
+                    else:
+                        print(f"⚠️ Invalid user ID '{u}' skipped.")
+                if user_id_list:
+                    for user_id in user_id_list:
+                        assign_members_to_group(manager=manager,
+                                                group_id=group_id,
+                                                user_id=user_id)
+        elif action == 'd':
+            print('Function in development!')
+            input('Press any key to return!')
+        elif action == 'q':
+            break
+
+
 def permissions_menu(manager: MetabaseAPIManager):
     while True:
         list_permissions_group(manager)
@@ -278,6 +324,7 @@ def permissions_menu(manager: MetabaseAPIManager):
         print('  c    - Create new permissions group')
         print('  u    - Update permissions')
         print('  d    - Delete permissions')
+        print('  a    - Add/delete user in permissions group')
         print('  b    - Back to main menu')
 
         action = input_str('\n🔢 Choose (ID / action): ',
@@ -294,6 +341,8 @@ def permissions_menu(manager: MetabaseAPIManager):
             update_permissions(manager)
         elif action == 'd':
             delete_permissions(manager)
+        elif action == 'a':
+            action_on_user_permissions(manager)
         elif action.isdigit():
             view_permissions_by_id(manager, int(action))
         else:
