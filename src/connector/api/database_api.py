@@ -186,3 +186,7 @@ class DatabaseAPI(Base):
         response = self._delete(url=self.get_url(database_id))
         self.set_self_url(original_url)
         return response
+
+    def get_fields_in_specific_db(self, database_id: int):
+        return self.get_database_detail(database_id=database_id,
+                                        extra='fields').json()

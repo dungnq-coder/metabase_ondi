@@ -120,3 +120,4 @@ mlflow/
 # Configurations file
 config.yaml
 debug
+test.py
