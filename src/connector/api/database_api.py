@@ -34,6 +34,24 @@ class DatabaseAPI(Base):
         self.set_self_url(original_url)
         return response
 
+    def get_all_table_in_specific_db(self, database_id: int):
+        schemas = self.get_database_detail(database_id=database_id,
+                                           extra='schemas').json()
+
+        list_table = []
+
+        for schema in schemas:
+            url = f'https://ondi-game.metabaseapp.com/api/database/{database_id}/schema/{schema}'
+            tables = self._get(url=url).json()
+            if tables:
+                for table in tables:
+                    list_table.append({
+                        'table_id': table.get('id'),
+                        'table_name': table.get('name')
+                    })
+
+        return list_table
+
     def post_database_action(self,
                              database_id: int,
                              action: str,
@@ -186,3 +204,7 @@ class DatabaseAPI(Base):
         response = self._delete(url=self.get_url(database_id))
         self.set_self_url(original_url)
         return response
+
+    def get_fields_in_specific_db(self, database_id: int):
+        return self.get_database_detail(database_id=database_id,
+                                        extra='fields').json()

@@ -16,6 +16,14 @@ def print_card_details(data: dict):
     print(f"📛 Name           : {data.get('name')}")
     print(f"🗄️ Database ID    : {data.get('database_id')}")
     print(f"🗂️ Collection ID  : {data.get('collection_id')}")
+
+    table_id = None
+    if data.get('dataset_query', {}).get('query', {}).get('source-table'):
+        table_id = data['dataset_query']['query']['source-table']
+    elif data.get('result_metadata'):
+        table_id = data['result_metadata'][0].get('table_id')
+    print(f"📋 Table ID       : {table_id or 'N/A'}")
+
     print(f"📊 Display Type   : {data.get('display')}")
     print(
         f"📁 Dashboard      : {data.get('dashboard', {}).get('name', 'N/A')} (ID: {data.get('dashboard', {}).get('id')})"

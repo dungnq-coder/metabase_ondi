@@ -1,3 +1,5 @@
+import copy
+
 from src.connector.api.base_api_class import Base
 
 
@@ -67,27 +69,67 @@ class CardAPI(Base):
         self.set_self_url(original_url)
         return response
 
-    def get_update_payload(self, original_payload: dict, database_id: int,
-                           query: str) -> dict:
+    def get_update_payload(
+            self,
+            original_payload: dict,
+            database_id: int,
+            table_id: int = None,
+            mapping: dict = None  # mapping: old_field_id -> new_field_id
+    ) -> dict:
         """
-        Update the database_id and SQL query in the original Metabase card payload.
-
-        Args:
-            original_payload (dict): The current card payload data.
-            database_id (int): The new database ID to be applied.
-            query (str): The new SQL query string.
-
-        Returns:
-            dict: The updated payload with the new database ID and query.
+        Update Metabase card payload to use a new database/table and remap field IDs.
         """
+        updated = copy.deepcopy(original_payload)
+        dataset_query = updated.get('dataset_query', {})
+        query_obj = dataset_query.get('query', {})
 
-        # Tạo bản sao để không làm thay đổi bản gốc
-        updated = original_payload.copy()
-
-        # Cập nhật các giá trị chính
+        # --- Always update database_id ---
         updated['database_id'] = database_id
-        updated['dataset_query']['database'] = database_id
-        updated['dataset_query']['native']['query'] = query
+        dataset_query['database'] = database_id
+
+        # --- Update table_id ---
+        old_table_id = query_obj.get('source-table')
+        if table_id is not None:
+            updated['table_id'] = table_id
+            query_obj['source-table'] = table_id
+
+        # --- Remap field IDs in query ---
+        if mapping:
+
+            def remap_field_ref(obj):
+                if isinstance(obj, list):
+                    # Cấu trúc ["field", <id>, {...}]
+                    if len(obj) >= 2 and obj[0] == 'field' and isinstance(
+                            obj[1], int):
+                        old_id = obj[1]
+                        new_id = mapping.get(old_id)
+                        if new_id:
+                            obj[1] = new_id
+                            # Cập nhật base-type nếu cần
+                            if table_id and len(obj) > 2 and isinstance(
+                                    obj[2], dict):
+                                obj[2]['base-type'] = obj[2].get(
+                                    'base-type', 'type/Integer')
+                    # Đệ quy cho từng phần tử
+                    for i in range(len(obj)):
+                        remap_field_ref(obj[i])
+                elif isinstance(obj, dict):
+                    for k, v in obj.items():
+                        remap_field_ref(v)
+
+            remap_field_ref(query_obj)
+
+            # --- Update result_metadata ---
+            for col in updated.get('result_metadata') or []:
+                old_id = col.get('id')
+                new_id = mapping.get(old_id)
+                if new_id:
+                    col['id'] = new_id
+                if table_id is not None:
+                    col['table_id'] = table_id
+
+        updated['dataset_query']['query'] = query_obj
+        updated['dataset_query'] = dataset_query
 
         return updated
 
