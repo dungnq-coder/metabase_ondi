@@ -100,12 +100,3 @@ class PermissionsAPI(Base):
         response = self._delete(url=self.get_url(permissions_id))
         self.set_self_url(original_url)
         return response
-
-
-if __name__ == '__main__':
-    config = BaseConfig()
-    manager = PermissionsAPI(
-        api_token=config.api_token,
-        url='https://ondi-game.metabaseapp.com/api/permissions')
-    response = manager.get_permissions_detail(extra='group', group_id=1)
-    pprint(response.json())

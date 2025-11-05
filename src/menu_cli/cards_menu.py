@@ -1,10 +1,12 @@
+import re
 from collections import defaultdict
 from pprint import pprint
 
 from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import (get_multiline_input, input_int, input_str,
                                    input_yes_no)
-from src.utils.mapping import map_field_ids
+from src.utils.mapping import (ignored_tables, map_field_ids_by_table_id,
+                               replace_table_names_in_query, table_mapping)
 from src.utils.print_cards import *
 from src.utils.screen_contact import clear_screen
 
@@ -30,8 +32,153 @@ def create_card(manager: MetabaseAPIManager):
     input('🔙 Press Enter to return...')
 
 
+# --- Global cache ---
+TABLE_ID_CACHE = {}
+
+
+def find_new_table_id(old_table_id: int,
+                      old_tables: list[dict],
+                      new_tables: list[dict],
+                      table_mapping: dict,
+                      log_file: str = 'table_mapping.log') -> int:
+    """
+    Tìm table_id mới dựa trên table_mapping từ old_tables -> new_tables.
+    Cache kết quả để tránh tra lại nhiều lần.
+    """
+    global TABLE_ID_CACHE
+
+    # --- Cache check ---
+    if old_table_id in TABLE_ID_CACHE:
+        return TABLE_ID_CACHE[old_table_id]
+
+    def log(msg: str):
+        print(msg)
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(msg + '\n')
+
+    old_table = next((t for t in old_tables if t['table_id'] == old_table_id),
+                     None)
+    if not old_table:
+        log(f'⚠️ Không tìm thấy old_table_id {old_table_id} trong old_tables')
+        for t in old_tables:
+            log(f"   old_table: table_id={t['table_id']}, table_name={t['table_name']}"
+                )
+        TABLE_ID_CACHE[old_table_id] = None
+        return None
+
+    old_table_name = old_table['table_name'].split('.')[-1]
+
+    # 🔍 Tìm mapping đầy đủ khớp phần đuôi
+    mapped_full = None
+    for full_old, full_new in table_mapping.items():
+        if full_old.endswith(old_table_name):
+            mapped_full = full_new
+            break
+
+    if not mapped_full:
+        mapped_full = old_table['table_name']
+
+    mapped_table_name = mapped_full.split('.')[-1]
+    log(f'🔍 Card trỏ tới old_table_id={old_table_id} ({old_table_name}) -> mapped_table_name={mapped_table_name}'
+        )
+
+    # 🔎 Tìm trong new_tables
+    for t in new_tables:
+        new_table_name = t['table_name'].split('.')[-1]
+        log(f"   Checking new_table: table_id={t['table_id']}, table_name={new_table_name}"
+            )
+        if new_table_name == mapped_table_name:
+            log(f"✅ Tìm thấy table mới: table_id={t['table_id']}, table_name={new_table_name}"
+                )
+            TABLE_ID_CACHE[old_table_id] = t['table_id']
+            return t['table_id']
+
+    log(f"⚠️ Không tìm thấy bảng mới tương ứng cho '{old_table_name}' → '{mapped_table_name}'"
+        )
+    TABLE_ID_CACHE[old_table_id] = None
+    return None
+
+
+def remap_field_ids(obj, field_mapping: dict):
+    if isinstance(obj, list):
+        if len(obj) >= 2 and obj[0] == 'field' and isinstance(obj[1], int):
+            old_id = obj[1]
+            new_id = field_mapping.get(old_id, old_id)
+            new_obj = ['field', new_id]
+            for i in range(2, len(obj)):
+                new_obj.append(remap_field_ids(obj[i], field_mapping))
+            return new_obj
+        else:
+            # ← SỬA: Tạo list mới và trả về
+            return [remap_field_ids(item, field_mapping) for item in obj]
+
+    elif isinstance(obj, dict):
+        return {k: remap_field_ids(v, field_mapping) for k, v in obj.items()}
+
+    else:
+        return obj
+
+
+def process_native_card(card_detail: dict, field_mapping: dict,
+                        new_db_id: int) -> dict:
+    updated = card_detail.copy()
+    dataset_query = updated.get('dataset_query', {})
+
+    # Update database
+    dataset_query['database'] = new_db_id
+    updated['database_id'] = new_db_id
+
+    # Update field_id trong template-tags
+    native_part = dataset_query.get('native', {})
+    tags = native_part.get('template-tags', {})
+
+    for tag_name, tag_info in tags.items():
+        dimension = tag_info.get('dimension')
+        if isinstance(
+                dimension,
+                list) and len(dimension) >= 2 and dimension[0] == 'field':
+            old_id = dimension[1]
+            if old_id in field_mapping:
+                tag_info['dimension'][1] = field_mapping[old_id]
+                print(
+                    f"✅ Updated field ID for tag '{tag_name}': {old_id} → {tag_info['dimension'][1]}"
+                )
+
+    updated['dataset_query'] = dataset_query
+    return updated
+
+
+def process_query_card(card_detail: dict, field_mapping: dict, new_db_id: int,
+                       new_table_id: int) -> dict:
+    updated = card_detail.copy()
+    dataset_query = updated.get('dataset_query', {})
+    query = dataset_query.get('query', {})
+
+    # Update database/table
+    dataset_query['database'] = new_db_id
+    updated['database_id'] = new_db_id
+    if 'source-table' in query and new_table_id:
+        query['source-table'] = new_table_id
+
+    # Remap field_ids – PHẢI GÁN LẠI!
+    for key in ['breakout', 'aggregation', 'filter']:
+        if key in query:
+            query[key] = remap_field_ids(query[key], field_mapping)
+
+    # Cũng cần xử lý expressions!
+    if 'expressions' in query:
+        query['expressions'] = remap_field_ids(query['expressions'],
+                                               field_mapping)
+
+    # order-by, limit, etc.
+    if 'order-by' in query:
+        query['order-by'] = remap_field_ids(query['order-by'], field_mapping)
+
+    updated['dataset_query']['query'] = query
+    return updated
+
+
 def update_cards(manager: MetabaseAPIManager):
-    """Update database/table cho các Metabase cards với lựa chọn đơn giản hơn."""
     print('=== 🔧 Update Cards Database/Table ===')
     print('1️⃣  Update ALL cards')
     print('2️⃣  Update cards in a specific collection')
@@ -40,26 +187,25 @@ def update_cards(manager: MetabaseAPIManager):
     print('0️⃣  Cancel')
 
     choice = input_int('👉 Choose an option (0-4): ')
-
     if choice == 0:
         print('❌ Cancelled.')
         return
 
-    cards = manager.card.list_all_cards()
+    all_cards = manager.card.list_all_cards()
     card_ids = []
 
     if choice == 1:
-        card_ids = [c['id'] for c in cards]
+        card_ids = [c['id'] for c in all_cards]
     elif choice == 2:
         collection_id = input_int('Enter collection ID: ')
         card_ids = [
-            c['id'] for c in cards
-            if c.get('collection', {}).get('id') == collection_id
+            c['id'] for c in all_cards
+            if c.get('collection_id') == collection_id
         ]
     elif choice == 3:
         dashboard_id = input_int('Enter dashboard ID: ')
         card_ids = [
-            c['id'] for c in cards if c.get('dashboard_id') == dashboard_id
+            c['id'] for c in all_cards if c.get('dashboard_id') == dashboard_id
         ]
     elif choice == 4:
         ids_str = input_str('Enter card IDs separated by comma: ')
@@ -72,52 +218,86 @@ def update_cards(manager: MetabaseAPIManager):
         return
 
     if not card_ids:
-        print('⚠️  No cards found. Exiting.')
+        print('⚠️ No cards found. Exiting.')
         return
 
     print(f'✅ Found {len(card_ids)} card(s) to update.')
 
-    # --- Database & Table ---
+    # --- Lấy database cũ từ card đầu tiên nếu user không nhập ---
+    first_card_db = next((manager.card.get_card_detail(cid).get('database_id')
+                          for cid in card_ids), None)
     database_id_new = input_int(
         'Enter new database ID (leave blank to keep current): ',
         allow_empty=True)
-    table_id_new = input_int(
-        'Enter new table ID (leave blank to keep current): ', allow_empty=True)
+    if not database_id_new:
+        database_id_new = first_card_db
 
-    cards_to_update = [c for c in cards if c['id'] in card_ids]
-    cards_by_db = defaultdict(list)
-    for c in cards_to_update:
-        db_id_old = c.get('database_id')
-        cards_by_db[db_id_old].append(c)
+    if not database_id_new:
+        print('❌ Không xác định được database mới. Exiting.')
+        return
 
-    # --- Update theo nhóm database ---
-    for db_id_old, card_objs in cards_by_db.items():
-        old_fields = manager.database.get_fields_in_specific_db(db_id_old)
+    # --- Update từng card ---
+    for cid in card_ids:
+        card_detail = manager.card.get_card_detail(cid)
+        query_type = card_detail.get('query_type')
+        updated_card = None
 
-        if database_id_new and database_id_new != db_id_old:
+        if query_type == 'query':
+            old_db_id = card_detail.get('database_id')
+            old_table_id = card_detail.get('dataset_query',
+                                           {}).get('query',
+                                                   {}).get('source-table')
+            old_tables = manager.database.get_all_table_in_specific_db(
+                old_db_id)
+            new_tables = manager.database.get_all_table_in_specific_db(
+                database_id_new)
+            old_fields = manager.database.get_fields_in_specific_db(old_db_id)
             new_fields = manager.database.get_fields_in_specific_db(
                 database_id_new)
-            # --- Dùng map_field_ids để tạo mapping old_id -> new_id ---
-            field_mapping = map_field_ids(old_fields, new_fields)
-        else:
-            # Nếu database không đổi, mapping giữ nguyên
-            field_mapping = {f['id']: f['id'] for f in old_fields}
+            new_table_id = find_new_table_id(old_table_id, old_tables,
+                                             new_tables, table_mapping)
+            field_mapping = map_field_ids_by_table_id(
+                old_fields=old_fields,
+                new_fields=new_fields,
+                old_table_id=old_table_id,
+                new_table_id=new_table_id)
+            updated_card = process_query_card(card_detail, field_mapping,
+                                              database_id_new, new_table_id)
 
-        for card_detail in card_objs:
-            cid = card_detail['id']
-            updated_payload = manager.card.get_update_payload(
-                original_payload=card_detail,
-                database_id=database_id_new or db_id_old,
-                table_id=table_id_new,
-                mapping=field_mapping)
-
-            response = manager.card.update_specific_card(cid, updated_payload)
-            if response.status_code < 400:
-                print(f'✅ Card ID {cid} updated successfully.')
+        elif query_type == 'native':
+            native_query = card_detail.get('dataset_query',
+                                           {}).get('native', {}).get('query')
+            if native_query:
+                updated_query = replace_table_names_in_query(
+                    native_query, table_mapping)
+                print(
+                    f'🔄 Card {cid} native query updated:\nOld: {native_query}\nNew: {updated_query}'
+                )
+                card_detail['dataset_query']['native']['query'] = updated_query
+                card_detail['database_id'] = database_id_new
+                updated_card = card_detail
             else:
                 print(
-                    f'❌ Failed to update Card ID {cid}: {response.status_code} {response.text}'
-                )
+                    f'⚠️ Card {cid} là native nhưng không có query để update.')
+                continue
+
+        else:
+            print(f'❌ Card {cid} có query_type không xác định: {query_type}')
+            continue
+
+        # --- Cập nhật card qua API ---
+        response = manager.card.update_specific_card(cid, updated_card)
+        if hasattr(response, 'status_code'):
+            success = response.status_code < 400
+        elif isinstance(response, dict):
+            success = 'id' in response
+        else:
+            success = False
+
+        if success:
+            print(f'✅ Card ID {cid} updated successfully.')
+        else:
+            print(f'❌ Failed to update Card ID {cid}: {response}')
 
     input('\n🔙 Press Enter to return to menu...')
 
