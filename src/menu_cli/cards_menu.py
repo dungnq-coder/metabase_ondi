@@ -11,6 +11,9 @@ from src.utils.screen_contact import clear_screen
 
 logger = logging.getLogger(__name__)
 
+# --- Global cache ---
+TABLE_ID_CACHE = {}
+
 
 def list_cards(manager: MetabaseAPIManager):
     cards = manager.card.list_all_cards()
@@ -33,19 +36,12 @@ def create_card(manager: MetabaseAPIManager):
     input('🔙 Press Enter to return...')
 
 
-# --- Global cache ---
-TABLE_ID_CACHE = {}
+# ---------------- Field & Table Mapping ----------------
 
 
 def find_new_table_id(old_table_id: int, old_tables: list[dict],
                       new_tables: list[dict], table_mapping: dict) -> int:
-    """Find new table_id for an old_table_id using the provided mapping.
-
-    Returns new table_id or None if not found. Results are cached in
-    TABLE_ID_CACHE to avoid repeated lookups.
-    """
     global TABLE_ID_CACHE
-
     if old_table_id in TABLE_ID_CACHE:
         return TABLE_ID_CACHE[old_table_id]
 
@@ -54,120 +50,144 @@ def find_new_table_id(old_table_id: int, old_tables: list[dict],
     if not old_table:
         logger.warning('Không tìm thấy old_table_id %s trong old_tables',
                        old_table_id)
-        for t in old_tables:
-            logger.debug(' old_table: table_id=%s, table_name=%s',
-                         t.get('table_id'), t.get('table_name'))
         TABLE_ID_CACHE[old_table_id] = None
         return None
 
-    old_table_name = str(old_table.get('table_name', '')).split('.')[-1]
+    old_table_name = old_table.get('table_name', '')
+    old_table_name_short = old_table_name.split('.')[-1]
 
-    # Try to find mapping that endswith the old tail name; fall back to same full name
-    mapped_full = None
-    for full_old, full_new in table_mapping.items():
-        if str(full_old).endswith(old_table_name):
-            mapped_full = full_new
-            break
+    # Tìm mapping từ table_mapping
+    mapped_full = next((new_full
+                        for full_old, new_full in table_mapping.items()
+                        if full_old.endswith(old_table_name_short)), None)
+    if mapped_full:
+        mapped_table_name_short = mapped_full.split('.')[-1]
+    else:
+        # Nếu không có mapping, dùng luôn tên cũ
+        mapped_table_name_short = old_table_name_short
 
-    if not mapped_full:
-        mapped_full = old_table.get('table_name')
+    new_table = next(
+        (t for t in new_tables
+         if t.get('table_name', '').split('.')[-1] == mapped_table_name_short),
+        None)
 
-    mapped_table_name = str(mapped_full).split('.')[-1]
-    logger.debug('Card trỏ tới old_table_id=%s (%s) -> mapped_table_name=%s',
-                 old_table_id, old_table_name, mapped_table_name)
-
-    for t in new_tables:
-        new_table_name = str(t.get('table_name', '')).split('.')[-1]
-        logger.debug(' Checking new_table: table_id=%s, table_name=%s',
-                     t.get('table_id'), new_table_name)
-        if new_table_name == mapped_table_name:
-            logger.info('Tìm thấy table mới: table_id=%s, table_name=%s',
-                        t.get('table_id'), new_table_name)
-            TABLE_ID_CACHE[old_table_id] = t.get('table_id')
-            return t.get('table_id')
-
-    logger.warning("Không tìm thấy bảng mới tương ứng cho '%s' → '%s'",
-                   old_table_name, mapped_table_name)
-    TABLE_ID_CACHE[old_table_id] = None
-    return None
+    TABLE_ID_CACHE[old_table_id] = new_table.get(
+        'table_id') if new_table else None
+    if not new_table:
+        logger.warning('Không tìm thấy new_table cho old_table %s (%s)',
+                       old_table_name, old_table_id)
+    return TABLE_ID_CACHE[old_table_id]
 
 
 def remap_field_ids(obj, field_mapping: dict):
-    """Recursively remap field ids in a nested structure used in Metabase queries.
-
-    Supports lists and dicts. Leaves other types unchanged.
-    """
     if isinstance(obj, list):
         if len(obj) >= 2 and obj[0] == 'field' and isinstance(obj[1], int):
             old_id = obj[1]
             new_id = field_mapping.get(old_id, old_id)
-            new_obj = ['field', new_id]
-            for i in range(2, len(obj)):
-                new_obj.append(remap_field_ids(obj[i], field_mapping))
-            return new_obj
-        else:
-            return [remap_field_ids(item, field_mapping) for item in obj]
-
+            return ['field', new_id] + [
+                remap_field_ids(item, field_mapping) for item in obj[2:]
+            ]
+        return [remap_field_ids(item, field_mapping) for item in obj]
     if isinstance(obj, dict):
         return {k: remap_field_ids(v, field_mapping) for k, v in obj.items()}
-
     return obj
 
 
-def process_native_card(card_detail: dict, field_mapping: dict,
-                        new_db_id: int) -> dict:
-    updated = copy.deepcopy(card_detail)
-    dataset_query = updated.get('dataset_query', {})
+def build_global_field_mapping(old_db_id: int, new_db_id: int,
+                               manager: MetabaseAPIManager) -> dict:
+    try:
+        old_tables = manager.database.get_all_table_in_specific_db(old_db_id)
+    except Exception:
+        logger.exception('Failed to fetch tables for old_db %s', old_db_id)
+        old_tables = []
 
-    # Update database
+    try:
+        new_tables = manager.database.get_all_table_in_specific_db(new_db_id)
+    except Exception:
+        logger.exception('Failed to fetch tables for new_db %s', new_db_id)
+        new_tables = []
+
+    try:
+        old_fields = manager.database.get_fields_in_specific_db(old_db_id)
+    except Exception:
+        logger.exception('Failed to fetch fields for old_db %s', old_db_id)
+        old_fields = []
+
+    try:
+        new_fields = manager.database.get_fields_in_specific_db(new_db_id)
+    except Exception:
+        logger.exception('Failed to fetch fields for new_db %s', new_db_id)
+        new_fields = []
+
+    global_mapping = {}
+    for old_table in old_tables:
+        new_table_id = find_new_table_id(old_table['table_id'], old_tables,
+                                         new_tables, table_mapping)
+        if new_table_id:
+            mapping = map_field_ids_by_table_id(
+                old_fields=old_fields,
+                new_fields=new_fields,
+                old_table_id=old_table['table_id'],
+                new_table_id=new_table_id)
+            global_mapping.update(mapping)
+
+    logger.info('✅ Global field mapping built: %d fields', len(global_mapping))
+    return global_mapping
+
+
+# ---------------- Process Card ----------------
+
+
+def process_card(card_detail: dict,
+                 global_field_mapping: dict,
+                 new_db_id: int,
+                 table_mapping: dict,
+                 old_tables: list[dict] = None,
+                 new_tables: list[dict] = None) -> dict:
+    updated_card = copy.deepcopy(card_detail)
+    dataset_query = updated_card.get('dataset_query', {})
+
+    # Always update database
+    updated_card['database_id'] = new_db_id
     dataset_query['database'] = new_db_id
-    updated['database_id'] = new_db_id
 
-    # Update field_id trong template-tags
-    native_part = dataset_query.get('native', {})
-    tags = native_part.get('template-tags', {})
+    query_type = updated_card.get('query_type')
+    if query_type == 'query':
+        query = dataset_query.get('query', {})
+        old_table_id = query.get('source-table')
+        if old_table_id and old_tables and new_tables:
+            new_table_id = find_new_table_id(old_table_id, old_tables,
+                                             new_tables, table_mapping)
+            if new_table_id:
+                query['source-table'] = new_table_id
+        for key in [
+                'breakout', 'aggregation', 'filter', 'expressions', 'order-by'
+        ]:
+            if key in query:
+                query[key] = remap_field_ids(query[key], global_field_mapping)
+        dataset_query['query'] = query
 
-    for tag_name, tag_info in tags.items():
-        dimension = tag_info.get('dimension')
-        if isinstance(
-                dimension,
-                list) and len(dimension) >= 2 and dimension[0] == 'field':
-            old_id = dimension[1]
-            if old_id in field_mapping:
-                tag_info['dimension'][1] = field_mapping[old_id]
-                logger.info("Updated field ID for tag '%s': %s → %s", tag_name,
-                            old_id, tag_info['dimension'][1])
+    elif query_type == 'native':
+        native = dataset_query.get('native', {})
+        sql_query = native.get('query')
+        if sql_query:
+            native['query'] = replace_table_names_in_query(
+                sql_query, table_mapping)
+        tags = native.get('template-tags', {})
+        for tag_info in tags.values():
+            dimension = tag_info.get('dimension')
+            if isinstance(
+                    dimension,
+                    list) and len(dimension) >= 2 and dimension[0] == 'field':
+                tag_info['dimension'][1] = global_field_mapping.get(
+                    dimension[1], dimension[1])
+        dataset_query['native'] = native
 
-    updated['dataset_query'] = dataset_query
-    return updated
+    updated_card['dataset_query'] = dataset_query
+    return updated_card
 
 
-def process_query_card(card_detail: dict, field_mapping: dict, new_db_id: int,
-                       new_table_id: int) -> dict:
-    updated = copy.deepcopy(card_detail)
-    dataset_query = updated.get('dataset_query', {})
-    query = dataset_query.get('query', {})
-
-    # Update database/table
-    dataset_query['database'] = new_db_id
-    updated['database_id'] = new_db_id
-    if 'source-table' in query and new_table_id is not None:
-        query['source-table'] = new_table_id
-
-    # Remap field_ids
-    for key in ['breakout', 'aggregation', 'filter']:
-        if key in query:
-            query[key] = remap_field_ids(query[key], field_mapping)
-
-    if 'expressions' in query:
-        query['expressions'] = remap_field_ids(query['expressions'],
-                                               field_mapping)
-
-    if 'order-by' in query:
-        query['order-by'] = remap_field_ids(query['order-by'], field_mapping)
-
-    updated['dataset_query']['query'] = query
-    return updated
+# ---------------- Update / Delete Cards ----------------
 
 
 def update_cards(manager: MetabaseAPIManager):
@@ -215,24 +235,15 @@ def update_cards(manager: MetabaseAPIManager):
 
     print(f'✅ Found {len(card_ids)} card(s) to update.')
 
-    # --- Lấy database cũ từ card đầu tiên nếu user không nhập ---
-    first_card_db = None
-    for cid in card_ids:
-        try:
-            first_card_db = manager.card.get_card_detail(cid).get(
-                'database_id')
-            if first_card_db is not None:
-                break
-        except Exception:
-            logger.exception(
-                'Failed to fetch card detail for %s when looking up first DB',
-                cid)
+    first_card_db = next(
+        (manager.card.get_card_detail(cid).get('database_id')
+         for cid in card_ids
+         if manager.card.get_card_detail(cid).get('database_id') is not None),
+        None)
 
     database_id_new = input_int(
         'Enter new database ID (leave blank to keep current): ',
         allow_empty=True)
-
-    # input_int with allow_empty returns None when user leaves blank
     if database_id_new is None:
         database_id_new = first_card_db
 
@@ -240,7 +251,8 @@ def update_cards(manager: MetabaseAPIManager):
         print('❌ Không xác định được database mới. Exiting.')
         return
 
-    # Ask dry-run
+    global_field_mapping = build_global_field_mapping(first_card_db,
+                                                      database_id_new, manager)
     dry_run = not input_yes_no(
         'Do you want to APPLY changes? (Answer NO to perform a dry-run)')
     if dry_run:
@@ -248,143 +260,43 @@ def update_cards(manager: MetabaseAPIManager):
             '--- Running in dry-run mode; no updates will be sent to the API ---'
         )
 
-    # --- Update từng card (with per-DB cache and per-card error handling) ---
     tables_cache = {}
-    fields_cache = {}
-
     for cid in card_ids:
         try:
             card_detail = manager.card.get_card_detail(cid)
-        except Exception as exc:
-            logger.exception('Failed to fetch card detail for %s: %s', cid,
-                             exc)
-            continue
+            old_db_id = card_detail.get('database_id')
 
-        query_type = card_detail.get('query_type')
-        updated_card = None
-
-        try:
-            if query_type == 'query':
-                old_db_id = card_detail.get('database_id')
-                old_table_id = card_detail.get('dataset_query',
-                                               {}).get('query',
-                                                       {}).get('source-table')
-
-                if old_db_id not in tables_cache:
+            for db_id in [old_db_id, database_id_new]:
+                if db_id not in tables_cache:
                     try:
                         tables_cache[
-                            old_db_id] = manager.database.get_all_table_in_specific_db(
-                                old_db_id)
+                            db_id] = manager.database.get_all_table_in_specific_db(
+                                db_id)
                     except Exception:
-                        logger.exception(
-                            'Failed to fetch tables for old_db %s', old_db_id)
-                        tables_cache[old_db_id] = []
+                        tables_cache[db_id] = []
 
-                if database_id_new not in tables_cache:
-                    try:
-                        tables_cache[
-                            database_id_new] = manager.database.get_all_table_in_specific_db(
-                                database_id_new)
-                    except Exception:
-                        logger.exception(
-                            'Failed to fetch tables for new_db %s',
-                            database_id_new)
-                        tables_cache[database_id_new] = []
+            updated_card = process_card(
+                card_detail=card_detail,
+                global_field_mapping=global_field_mapping,
+                new_db_id=database_id_new,
+                table_mapping=table_mapping,
+                old_tables=tables_cache.get(old_db_id, []),
+                new_tables=tables_cache.get(database_id_new, []))
 
-                if old_db_id not in fields_cache:
-                    try:
-                        fields_cache[
-                            old_db_id] = manager.database.get_fields_in_specific_db(
-                                old_db_id)
-                    except Exception:
-                        logger.exception(
-                            'Failed to fetch fields for old_db %s', old_db_id)
-                        fields_cache[old_db_id] = []
+            print(f'📝 Card ID: {cid} ({updated_card.get("name")})')
+            print_card_details(updated_card)
 
-                if database_id_new not in fields_cache:
-                    try:
-                        fields_cache[
-                            database_id_new] = manager.database.get_fields_in_specific_db(
-                                database_id_new)
-                    except Exception:
-                        logger.exception(
-                            'Failed to fetch fields for new_db %s',
-                            database_id_new)
-                        fields_cache[database_id_new] = []
-
-                old_tables = tables_cache.get(old_db_id, [])
-                new_tables = tables_cache.get(database_id_new, [])
-                old_fields = fields_cache.get(old_db_id, [])
-                new_fields = fields_cache.get(database_id_new, [])
-
-                new_table_id = find_new_table_id(old_table_id, old_tables,
-                                                 new_tables, table_mapping)
-                if new_table_id is None:
-                    logger.warning(
-                        'Skipping card %s because new_table_id not found for old_table_id %s',
-                        cid, old_table_id)
-                    continue
-
-                field_mapping = map_field_ids_by_table_id(
-                    old_fields=old_fields,
-                    new_fields=new_fields,
-                    old_table_id=old_table_id,
-                    new_table_id=new_table_id)
-
-                updated_card = process_query_card(card_detail, field_mapping,
-                                                  database_id_new,
-                                                  new_table_id)
-
-            elif query_type == 'native':
-                native_query = card_detail.get('dataset_query',
-                                               {}).get('native',
-                                                       {}).get('query')
-                if native_query:
-                    updated_query = replace_table_names_in_query(
-                        native_query, table_mapping)
-                    logger.info(
-                        'Card %s native query updated. Old: %s New: %s', cid,
-                        native_query, updated_query)
-                    updated = copy.deepcopy(card_detail)
-                    updated['dataset_query']['native']['query'] = updated_query
-                    updated['database_id'] = database_id_new
-                    updated_card = updated
-                else:
-                    logger.warning(
-                        'Card %s is native but has no query to update', cid)
-                    continue
-
+            if not dry_run:
+                manager.card.update_specific_card(cid, updated_card)
+                print('✅ Updated successfully.')
             else:
-                logger.warning('Card %s has unknown query_type: %s', cid,
-                               query_type)
-                continue
+                print('💡 Dry-run only, not applied.')
 
-            # Apply or display
-            if dry_run:
-                print(
-                    f'[DRY-RUN] Card {cid} would be updated. New database_id={database_id_new}'
-                )
-                continue
+        except Exception:
+            logger.exception('Failed processing card %s', cid)
 
-            response = manager.card.update_specific_card(cid, updated_card)
-            if hasattr(response, 'status_code'):
-                success = response.status_code < 400
-            elif isinstance(response, dict):
-                success = 'id' in response
-            else:
-                success = False
-
-            if success:
-                print(f'✅ Card ID {cid} updated successfully.')
-            else:
-                print(f'❌ Failed to update Card ID {cid}: {response}')
-
-        except Exception as exc:
-            logger.exception('Error while processing/updating card %s: %s',
-                             cid, exc)
-            continue
-
-    input('\n🔙 Press Enter to return to menu...')
+    print('🎯 Done updating cards.')
+    input('🔙 Press Enter to return...')
 
 
 def delete_card(manager: MetabaseAPIManager):
@@ -396,7 +308,6 @@ def delete_card(manager: MetabaseAPIManager):
 
     confirm = input_yes_no(f'Are you sure you want to delete card ID {cid}?')
     if confirm:
-        # Giả sử manager.card.delete_specific_card(cid) trả về response
         res = manager.card.delete_specific_card(cid)
         if res.status_code < 400:
             print(f'Card ID {cid} deleted successfully.')
