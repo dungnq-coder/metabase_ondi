@@ -192,6 +192,8 @@ def create_permissions(manager: MetabaseAPIManager):
     assign_permissions_to_dbs(manager, new_group_id, admin_dbs,
                               present_permission)
 
+    clear_screen()
+
     # --- Thêm members vào group ---
     all_member = manager.permissions.get_permissions_detail(extra='group',
                                                             group_id=1)

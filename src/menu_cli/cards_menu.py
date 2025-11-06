@@ -396,7 +396,6 @@ def delete_card(manager: MetabaseAPIManager):
 
     confirm = input_yes_no(f'Are you sure you want to delete card ID {cid}?')
     if confirm:
-        # Giả sử manager.card.delete_specific_card(cid) trả về response
         res = manager.card.delete_specific_card(cid)
         if res.status_code < 400:
             print(f'Card ID {cid} deleted successfully.')

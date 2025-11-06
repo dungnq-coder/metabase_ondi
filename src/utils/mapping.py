@@ -1,3 +1,5 @@
+import re
+
 from pybloom_live import BloomFilter
 
 # Full table name mapping
@@ -42,6 +44,16 @@ ignored_tables = {
     'data_billing.gcp_billing_export_v1_01D065_6EF44D_70BCA6',
     'flattened_table.test_dh_ads',
     'huynn_temp_table.dh_user_flow',
+}
+
+spec_table = {
+    'fortias-saga.singular.creative_data',
+    'fortias-saga.singular.marketing_data'
+}
+
+rename = {
+    "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
+    "('AND_Hero Blitz','Hero Blitz_AOS','Hero Blitz_iOS')"
 }
 
 
@@ -95,24 +107,46 @@ def map_field_ids_by_table_id(old_fields: list[dict], new_fields: list[dict],
     return mapping
 
 
-import re
-
-
-def replace_table_names_in_query(query: str, table_mapping: dict) -> str:
+def replace_table_names_in_query(query: str,
+                                 table_mapping: dict = table_mapping,
+                                 spec_table: set = spec_table,
+                                 rename: dict = rename) -> str:
     """
-    Thay tên bảng trong query SQL dựa trên mapping đầy đủ.
-    Ghi log các bảng được thay.
+    Replace table names in a SQL query based on a full mapping dictionary.
+    If the query contains any table names listed in `spec_table`, apply additional
+    string replacements defined in the `rename` dictionary.
+
+    Logs every replacement made for better traceability.
+
+    Args:
+        query (str): The original SQL query string.
+        table_mapping (dict): Mapping of old full table names → new full table names.
+        spec_table (set): Set of special table names that trigger additional replacements.
+        rename (dict): Mapping of old substrings → new substrings to replace in the query.
+
+    Returns:
+        str: The updated SQL query with replaced table names and renamed substrings.
     """
 
     def log(msg):
         print(msg)
 
     new_query = query
+
+    # --- Step 1️⃣: Replace table names based on table_mapping ---
     for old_full, new_full in table_mapping.items():
-        # Chỉ thay đúng cụm `old_full` (giữa dấu `backtick`)
-        pattern = re.escape(f'`{old_full}`')
+        pattern = re.escape(
+            f'`{old_full}`')  # Match exact table name inside backticks
         if re.search(pattern, new_query):
             new_query = re.sub(pattern, f'`{new_full}`', new_query)
             log(f'🔄 Replaced `{old_full}` → `{new_full}`')
+
+    # --- Step 2️⃣: Apply rename mapping if query references any spec_table ---
+    if any(spec in new_query for spec in spec_table):
+        log('✨ Query contains a spec_table — applying rename mapping...')
+        for old_str, new_str in rename.items():
+            if old_str in new_query:
+                new_query = new_query.replace(old_str, new_str)
+                log(f'📝 Renamed text: {old_str} → {new_str}')
 
     return new_query
