@@ -44,6 +44,16 @@ ignored_tables = {
     'huynn_temp_table.dh_user_flow',
 }
 
+spec_table = {
+    'fortias-saga.singular.creative_data',
+    'fortias-saga.singular.marketing_data'
+}
+
+rename = {
+    "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
+    "('AND_Hero Blitz','Hero Blitz_AOS','Hero Blitz_iOS')"
+}
+
 
 def map_field_ids_by_table_id(old_fields: list[dict], new_fields: list[dict],
                               old_table_id: int, new_table_id: int) -> dict:
@@ -98,21 +108,67 @@ def map_field_ids_by_table_id(old_fields: list[dict], new_fields: list[dict],
 import re
 
 
-def replace_table_names_in_query(query: str, table_mapping: dict) -> str:
+def replace_table_names_in_query(query: str,
+                                 table_mapping: dict,
+                                 spec_table: set = spec_table,
+                                 rename: dict = rename) -> str:
     """
-    Thay tên bảng trong query SQL dựa trên mapping đầy đủ.
-    Ghi log các bảng được thay.
+    Replace table names in a SQL query based on a full mapping dictionary.
+    If the query contains any table names listed in `spec_table`, apply additional
+    string replacements defined in the `rename` dictionary.
+    Also removes alias patterns like: AS 'alias' or AS "alias".
+
+    Args:
+        query (str): The original SQL query string.
+        table_mapping (dict): Mapping of old full table names → new full table names.
+        spec_table (set): Set of special table names that trigger additional replacements.
+        rename (dict): Mapping of old substrings → new substrings to replace in the query.
+
+    Returns:
+        str: The updated SQL query with replaced table names and renamed substrings.
     """
 
     def log(msg):
         print(msg)
 
     new_query = query
+
+    pattern_subquery = re.compile(
+        r'FROM\s*\(\s*SELECT\s*\*\s*FROM\s*(`[^`]+`)\s*\)',
+        re.IGNORECASE | re.DOTALL  # DOTALL để . khớp cả newline
+    )
+
+    matches = pattern_subquery.findall(new_query)
+    for match in matches:
+        # Dùng regex để replace trực tiếp, tránh lỗi khoảng trắng/newline
+        new_query = re.sub(r'FROM\s*\(\s*SELECT\s*\*\s*FROM\s*' +
+                           re.escape(match) + r'\s*\)',
+                           f'FROM {match}',
+                           new_query,
+                           flags=re.IGNORECASE | re.DOTALL)
+        log(f'✂️ Simplified redundant subquery: {match}')
+
+    # --- Step 1: Replace table names ---
     for old_full, new_full in table_mapping.items():
-        # Chỉ thay đúng cụm `old_full` (giữa dấu `backtick`)
-        pattern = re.escape(f'`{old_full}`')
+        pattern = re.escape(
+            f'`{old_full}`')  # Match exact table name inside backticks
         if re.search(pattern, new_query):
             new_query = re.sub(pattern, f'`{new_full}`', new_query)
             log(f'🔄 Replaced `{old_full}` → `{new_full}`')
+
+    # --- Step 2: Apply rename mapping if contains special table ---
+    if any(spec in new_query for spec in spec_table):
+        log('✨ Query contains a spec_table — applying rename mapping...')
+        for old_str, new_str in rename.items():
+            if old_str in new_query:
+                new_query = new_query.replace(old_str, new_str)
+                log(f'📝 Renamed text: {old_str} → {new_str}')
+
+    # --- Step 3: Remove alias patterns like AS 'alias' or AS "alias" ---
+    alias_pattern = r"\bAS\s+(['\"`])[A-Za-z0-9_.]+?\1"
+    if re.search(alias_pattern, new_query, re.IGNORECASE):
+        new_query = re.sub(alias_pattern, '', new_query, flags=re.IGNORECASE)
+        log("🚮 Removed alias patterns like AS 'alias' / AS \"alias\" / AS `alias`"
+            )
 
     return new_query

@@ -284,7 +284,6 @@ def update_cards(manager: MetabaseAPIManager):
                 new_tables=tables_cache.get(database_id_new, []))
 
             print(f'📝 Card ID: {cid} ({updated_card.get("name")})')
-            print_card_details(updated_card)
 
             if not dry_run:
                 manager.card.update_specific_card(cid, updated_card)
