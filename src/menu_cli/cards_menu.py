@@ -137,8 +137,24 @@ def build_global_field_mapping(old_db_id: int, new_db_id: int,
 
 # ---------------- Process Card ----------------
 
+def special_process_card(manager: MetabaseAPIManager, card_detail: dict) -> dict:
+    update_cards = copy.deepcopy(card_detail)
+    source_card_id = card_detail.get('source_card_id')
+    name = manager.card.get_card_detail(source_card_id).get('name')
 
-def process_card(card_detail: dict,
+    dashboard_id = card_detail.get('dashboard_id')
+
+    all_card = manager.card.list_all_cards()
+    for c in all_card:
+        if c['name'] == name and c['dashboard_id'] == dashboard_id and c['id'] != card_detail.get('id'):
+            update_cards['source_card_id'] = c['id']
+            update_cards['dataset_query']['query']['source-table'] = f'card__{c["id"]}'
+            break
+    return update_cards
+
+
+def process_card(manager: MetabaseAPIManager,
+                 card_detail: dict,
                  global_field_mapping: dict,
                  new_db_id: int,
                  table_mapping: dict,
@@ -152,6 +168,16 @@ def process_card(card_detail: dict,
     dataset_query['database'] = new_db_id
 
     query_type = updated_card.get('query_type')
+
+    if updated_card.get('source_card_id') and manager is not None:
+        try:
+            updated_card = special_process_card(manager, updated_card)
+        except Exception as e:
+            logger.warning(
+                f"⚠️ Failed to special-process card {updated_card.get('id')}: {e}"
+            )
+        return updated_card
+    
     if query_type == 'query':
         query = dataset_query.get('query', {})
         old_table_id = query.get('source-table')
@@ -276,6 +302,7 @@ def update_cards(manager: MetabaseAPIManager):
                         tables_cache[db_id] = []
 
             updated_card = process_card(
+                manager=manager,
                 card_detail=card_detail,
                 global_field_mapping=global_field_mapping,
                 new_db_id=database_id_new,
