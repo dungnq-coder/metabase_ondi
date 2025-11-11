@@ -132,6 +132,7 @@ def replace_table_names_in_query(query: str,
         print(msg)
 
     new_query = query
+    change_db = False
 
     pattern_subquery = re.compile(
         r'FROM\s*\(\s*SELECT\s*\*\s*FROM\s*(`[^`]+`)\s*\)',
@@ -162,13 +163,14 @@ def replace_table_names_in_query(query: str,
         for old_str, new_str in rename.items():
             if old_str in new_query:
                 new_query = new_query.replace(old_str, new_str)
-                log(f'📝 Renamed text: {old_str} → {new_str}')
+                change_db = True
+                log(f'📝 Renamed text: {old_str} → {new_str} and change db {change_db}'
+                    )
 
     # --- Step 3: Remove alias patterns like AS 'alias' or AS "alias" ---
-    alias_pattern = r"\bAS\s+(['\"`])[A-Za-z0-9_.]+?\1"
+    alias_pattern = r'\bAS\s+([`])[A-Za-z0-9_.]+?\1'
     if re.search(alias_pattern, new_query, re.IGNORECASE):
         new_query = re.sub(alias_pattern, '', new_query, flags=re.IGNORECASE)
-        log("🚮 Removed alias patterns like AS 'alias' / AS \"alias\" / AS `alias`"
-            )
+        log('🚮 Removed alias patterns like AS `alias`')
 
-    return new_query
+    return new_query, change_db

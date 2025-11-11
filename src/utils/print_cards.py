@@ -1,5 +1,6 @@
 # src/utils/print_cards.py
 import re
+
 from .format_time import format_time
 from .icons import icon_bool, icon_display
 from .permissions import format_permissions
@@ -37,8 +38,8 @@ def print_card_details(data: dict):
     table_name = None
 
     # Metabase structured query
-    if dataset_query.get('query', {}).get('source-table'):
-        table_id = dataset_query['query']['source-table']
+    if dataset_query.get('query', {}).get('source-query'):
+        table_id = dataset_query['query']['source-query']['source-table']
     elif data.get('result_metadata'):
         table_id = data['result_metadata'][0].get('table_id')
 
@@ -55,8 +56,12 @@ def print_card_details(data: dict):
     creator = data.get('creator') or {}
 
     print(f"📊 Display Type   : {data.get('display')}")
-    print(f"📁 Dashboard      : {dashboard.get('name', 'N/A')} (ID: {dashboard.get('id', 'N/A')})")
-    print(f"👤 Creator        : {creator.get('first_name', 'Unknown')} {creator.get('last_name', '')}".strip())
+    print(
+        f"📁 Dashboard      : {dashboard.get('name', 'N/A')} (ID: {dashboard.get('id', 'N/A')})"
+    )
+    print(
+        f"👤 Creator        : {creator.get('first_name', 'Unknown')} {creator.get('last_name', '')}"
+        .strip())
     print(f"👁️ View Count     : {data.get('view_count', 0)}")
     print(f"🕒 Created At     : {format_time(data.get('created_at'))}")
     print(f"🔄 Updated At     : {format_time(data.get('updated_at'))}")

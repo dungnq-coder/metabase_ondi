@@ -137,7 +137,9 @@ def build_global_field_mapping(old_db_id: int, new_db_id: int,
 
 # ---------------- Process Card ----------------
 
-def special_process_card(manager: MetabaseAPIManager, card_detail: dict) -> dict:
+
+def special_process_card(manager: MetabaseAPIManager,
+                         card_detail: dict) -> dict:
     update_cards = copy.deepcopy(card_detail)
     source_card_id = card_detail.get('source_card_id')
     name = manager.card.get_card_detail(source_card_id).get('name')
@@ -146,9 +148,11 @@ def special_process_card(manager: MetabaseAPIManager, card_detail: dict) -> dict
 
     all_card = manager.card.list_all_cards()
     for c in all_card:
-        if c['name'] == name and c['dashboard_id'] == dashboard_id and c['id'] != card_detail.get('id'):
+        if c['name'] == name and c['dashboard_id'] == dashboard_id and c[
+                'id'] != card_detail.get('id'):
             update_cards['source_card_id'] = c['id']
-            update_cards['dataset_query']['query']['source-table'] = f'card__{c["id"]}'
+            update_cards['dataset_query']['query'][
+                'source-table'] = f'card__{c["id"]}'
             break
     return update_cards
 
@@ -162,6 +166,8 @@ def process_card(manager: MetabaseAPIManager,
                  new_tables: list[dict] = None) -> dict:
     updated_card = copy.deepcopy(card_detail)
     dataset_query = updated_card.get('dataset_query', {})
+
+    old_db_id = updated_card['database_id']
 
     # Always update database
     updated_card['database_id'] = new_db_id
@@ -177,15 +183,18 @@ def process_card(manager: MetabaseAPIManager,
                 f"⚠️ Failed to special-process card {updated_card.get('id')}: {e}"
             )
         return updated_card
-    
+
     if query_type == 'query':
         query = dataset_query.get('query', {})
-        old_table_id = query.get('source-table')
+        old_table_id = query.get('source-table') or query.get(
+            'source-query', {}).get('source-table')
         if old_table_id and old_tables and new_tables:
             new_table_id = find_new_table_id(old_table_id, old_tables,
                                              new_tables, table_mapping)
+            print(f'NEW TABLE ID: {new_table_id}')
             if new_table_id:
                 query['source-table'] = new_table_id
+                query['source-query']['source-table'] = new_table_id
         for key in [
                 'breakout', 'aggregation', 'filter', 'expressions', 'order-by'
         ]:
@@ -197,17 +206,20 @@ def process_card(manager: MetabaseAPIManager,
         native = dataset_query.get('native', {})
         sql_query = native.get('query')
         if sql_query:
-            native['query'] = replace_table_names_in_query(
+            native['query'], change_db = replace_table_names_in_query(
                 sql_query, table_mapping)
-        tags = native.get('template-tags', {})
-        for tag_info in tags.values():
-            dimension = tag_info.get('dimension')
-            if isinstance(
-                    dimension,
-                    list) and len(dimension) >= 2 and dimension[0] == 'field':
-                tag_info['dimension'][1] = global_field_mapping.get(
-                    dimension[1], dimension[1])
-        dataset_query['native'] = native
+        if change_db:
+            updated_card['database_id'] = old_db_id
+            dataset_query['database'] = old_db_id
+        else:
+            tags = native.get('template-tags', {})
+            for tag_info in tags.values():
+                dimension = tag_info.get('dimension')
+                if isinstance(dimension, list) and len(
+                        dimension) >= 2 and dimension[0] == 'field':
+                    tag_info['dimension'][1] = global_field_mapping.get(
+                        dimension[1], dimension[1])
+            dataset_query['native'] = native
 
     updated_card['dataset_query'] = dataset_query
     return updated_card
