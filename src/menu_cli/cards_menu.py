@@ -5,7 +5,8 @@ from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import (get_multiline_input, input_int, input_str,
                                    input_yes_no)
 from src.utils.mapping import (ignored_tables, map_field_ids_by_table_id,
-                               replace_table_names_in_query, table_mapping)
+                               replace_table_names_in_query, table_mapping_nw,
+                               table_mapping_sr)
 from src.utils.print_cards import print_card_details
 from src.utils.screen_contact import clear_screen
 
@@ -94,7 +95,8 @@ def remap_field_ids(obj, field_mapping: dict):
 
 
 def build_global_field_mapping(old_db_id: int, new_db_id: int,
-                               manager: MetabaseAPIManager) -> dict:
+                               manager: MetabaseAPIManager,
+                               table_mapping: dict) -> dict:
     try:
         old_tables = manager.database.get_all_table_in_specific_db(old_db_id)
     except Exception:
@@ -186,15 +188,25 @@ def process_card(manager: MetabaseAPIManager,
 
     if query_type == 'query':
         query = dataset_query.get('query', {})
-        old_table_id = query.get('source-table') or query.get(
-            'source-query', {}).get('source-table')
-        if old_table_id and old_tables and new_tables:
-            new_table_id = find_new_table_id(old_table_id, old_tables,
-                                             new_tables, table_mapping)
-            print(f'NEW TABLE ID: {new_table_id}')
-            if new_table_id:
-                query['source-table'] = new_table_id
-                query['source-query']['source-table'] = new_table_id
+        old_table_id = (query.get('source-table')
+                        or query.get('source-query', {}).get('source-table'))
+
+        if not (old_table_id and old_tables and new_tables):
+            return updated_card
+
+        new_table_id = find_new_table_id(old_table_id, old_tables, new_tables,
+                                         table_mapping)
+        logger.info(f'New table ID resolved: {new_table_id}')
+
+        if not new_table_id:
+            return updated_card
+
+        # Update the query structure with the new table ID
+        source_query = query.get('source-query')
+        if source_query is not None:
+            query['source-query']['source-table'] = new_table_id
+        else:
+            query['source-table'] = new_table_id
         for key in [
                 'breakout', 'aggregation', 'filter', 'expressions', 'order-by'
         ]:
@@ -289,8 +301,19 @@ def update_cards(manager: MetabaseAPIManager):
         print('❌ Không xác định được database mới. Exiting.')
         return
 
+    db_detail = manager.database.get_database_detail(
+        database_id=database_id_new)
+    db_name = db_detail.json().get('name', '').strip()
+
+    # Safely generate a lowercase abbreviation from the first letter of each word
+    short_db_name = ''.join(word[0].lower() for word in db_name.split()
+                            if word)
+
+    table_mapping = globals().get(f'table_mapping_{short_db_name}')
+
     global_field_mapping = build_global_field_mapping(first_card_db,
-                                                      database_id_new, manager)
+                                                      database_id_new, manager,
+                                                      table_mapping)
     dry_run = not input_yes_no(
         'Do you want to APPLY changes? (Answer NO to perform a dry-run)')
     if dry_run:

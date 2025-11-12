@@ -1,7 +1,7 @@
-from pybloom_live import BloomFilter
+import re
 
 # Full table name mapping
-table_mapping = {
+table_mapping_sr = {
     'fortias-saga.flattened_table.huynn_cs_character':
     'sword-rouge-lite.flattened_table.cs_character',
     'fortias-saga.flattened_table.huynn_cs_support':
@@ -38,6 +38,37 @@ table_mapping = {
     'sword-rouge-lite.flattened_table.sr_resource_management_by_source',
 }
 
+table_mapping_nw = {
+    'fortias-saga.flattened_table.huynn_cs_character':
+    'island-battle.dashboard_table.huynn_cs_character',
+    'fortias-saga.flattened_table.huynn_cs_support':
+    'island-battle.dashboard_table.huynn_cs_support',
+    'fortias-saga.flattened_table.character':
+    'fortias-saga.dwh_north_war.frb_character_*',
+    'fortias-saga.flattened_table.equipment':
+    'fortias-saga.dwh_north_war.frb_equipment_*',
+    'fortias-saga.flattened_table.huynn_dh_active_daily':
+    'island-battle.dashboard_table.huynn_is_active_daily',
+    'fortias-saga.flattened_table.huynn_dh_campaign_progress':
+    'island-battle.dashboard_table.huynn_is_campaign_progress',
+    'fortias-saga.flattened_table.in_app_purchase':
+    'fortias-saga.dwh_north_war.frb_in_app_purchase_*',
+    'fortias-saga.flattened_table.user_engagement':
+    'fortias-saga.dwh_north_war.frb_user_engagement_*',
+    'fortias-saga.huynn_temp_table.dh_feature_max_stage':
+    'island-battle.dashboard_table.is_feature_max_stage',
+    'fortias-saga.huynn_temp_table.dh_iaa_dashboard':
+    'island-battle.dashboard_table.is_iaa_dashboard',
+    'fortias-saga.huynn_temp_table.dh_product_exposure':
+    'sword-rouge-lite.dashboard_table.sr_product_exposure',
+    'fortias-saga.flattened_table.huynn_dh_tutorial':
+    'island-battle.dashboard_table.huynn_is_tutorial',
+    'fortias-saga.huynn_temp_table.level_mode_summary':
+    'island-battle.dashboard_table.is_level_mode_summary',
+    'fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard':
+    'island-battle.dashboard_table.is_iaa_placement_dashboard',
+}
+
 ignored_tables = {
     'data_billing.gcp_billing_export_v1_01D065_6EF44D_70BCA6',
     'flattened_table.test_dh_ads',
@@ -49,9 +80,14 @@ spec_table = {
     'fortias-saga.singular.marketing_data'
 }
 
-rename = {
+rename_sr = {
     "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
     "('AND_Hero Blitz','Hero Blitz_AOS','Hero Blitz_iOS')"
+}
+
+rename_nw = {
+    "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
+    "('North War Android','com.bgg.island.battle')"
 }
 
 
@@ -105,13 +141,10 @@ def map_field_ids_by_table_id(old_fields: list[dict], new_fields: list[dict],
     return mapping
 
 
-import re
-
-
 def replace_table_names_in_query(query: str,
                                  table_mapping: dict,
                                  spec_table: set = spec_table,
-                                 rename: dict = rename) -> str:
+                                 rename: dict = rename_sr) -> str:
     """
     Replace table names in a SQL query based on a full mapping dictionary.
     If the query contains any table names listed in `spec_table`, apply additional
