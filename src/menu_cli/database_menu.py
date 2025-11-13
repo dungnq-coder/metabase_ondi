@@ -237,10 +237,15 @@ def update_database(manager: MetabaseAPIManager):
     response = manager.database._put(
         url=f'{manager.database.get_self_url()}{cid}', json_data=payload)
 
-    if response.status_code < 400:
+    res_sync = manager.database.post_database_action(database_id=cid,
+                                                     action='sync_schema')
+
+    if res_sync.status_code < 400 and response.status_code < 400:
         print(f"✅ Database '{name}' updated successfully!")
     else:
-        print(f'❌ Failed to update database. Status: {response.status_code}')
+        print(
+            f'❌ Failed to update database. Status: {response.status_code} and sync status: {res_sync.status_code}'
+        )
 
     input('🔙 Press Enter to return...')
 

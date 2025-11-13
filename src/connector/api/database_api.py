@@ -60,6 +60,7 @@ class DatabaseAPI(Base):
         General method to perform POST actions on a database.
         Examples of `action`:
             - 'validate'
+            - 'sync_schema'
         """
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
@@ -163,6 +164,7 @@ class DatabaseAPI(Base):
                 'project-id': project_id,
                 'dataset-filters-type': 'inclusion',
                 'dataset-filters-patterns': dataset_id,
+                'dataset_id': dataset_id,
                 'service-account-json': sa_json,
             }.items() if v is not None
         }
