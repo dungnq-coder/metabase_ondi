@@ -3,6 +3,8 @@ from src.connector.api.collection_api import CollectionAPI
 from src.connector.api.dashboard_api import DashboardAPI
 from src.connector.api.database_api import DatabaseAPI
 from src.connector.api.permission_api import PermissionsAPI
+from src.connector.api.timeline_api import TimelineAPI
+from src.connector.api.timeline_event_api import TimelineEventAPI
 
 
 class MetabaseAPIManager:
@@ -76,3 +78,13 @@ class MetabaseAPIManager:
     def permissions(self) -> PermissionsAPI:
         """API client for Metabase permissions."""
         return self._get_client(PermissionsAPI, 'permissions')
+
+    @property
+    def timeline(self) -> TimelineAPI:
+        """API client for Metabase timelines."""
+        return self._get_client(TimelineAPI, 'timeline')
+
+    @property
+    def timeline_event(self) -> TimelineEventAPI:
+        """API client for Metabase timeline events."""
+        return self._get_client(TimelineEventAPI, 'timeline-event')

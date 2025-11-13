@@ -5,8 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "pandas>=2.3.3",
     "pre-commit>=4.3.0",
     "pybloom-live>=4.0.0",
     "requests>=2.32.5",
+    "sumy>=0.11.0",
     "yapf>=0.43.0",
 ]

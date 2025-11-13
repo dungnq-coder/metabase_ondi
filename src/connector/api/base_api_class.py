@@ -24,6 +24,7 @@ class Base:
                                     headers=self._headers,
                                     params=params,
                                     json=json_data)
+        print(response.text)
         response.raise_for_status()
         return response
 
