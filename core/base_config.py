@@ -124,3 +124,13 @@ class BaseConfig:
     @property
     def service_account(self) -> str:
         return self.get('gcp.service_account_path', '')
+
+    @property
+    def fs_timline_event(self) -> str:
+        return self.get('metabase.time_line_dh_id'), self.get(
+            'gcp.dh_patch_note')
+
+    @property
+    def sr_timeline_event(self) -> str:
+        return self.get('metabase.time_line_sr_id'), self.get(
+            'gcp.sr_patch_note')
