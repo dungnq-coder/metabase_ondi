@@ -8,9 +8,9 @@ Follow the steps below to set up your development environment.
 
 ## 📚 Table of Contents
 
-1. [Install `uv`](#-1-install-uv)  
-2. [Set Up the Virtual Environment](#-2-set-up-the-virtual-environment)  
-3. [Verify the Setup](#-3-verify-the-setup)  
+1. [Install `uv`](#-1-install-uv)
+2. [Set Up the Virtual Environment](#-2-set-up-the-virtual-environment)
+3. [Verify the Setup](#-3-verify-the-setup)
 4. [Run the Application](#-4-run-the-application)
 
 ---

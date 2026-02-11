@@ -88,8 +88,10 @@ class PermissionsAPI(Base):
 
     def update_premissions(self, payload: dict):
         """Update premissions."""
+        params = {'skip-graph': 'false', 'force': 'false'}
         response = self._put(url=self.get_url(extra_path='graph'),
-                             json_data=payload or {})
+                             json_data=payload or {},
+                             params=params)
         return response
 
     def delete_specific_permissions(self, permissions_id: int):
