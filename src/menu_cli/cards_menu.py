@@ -1,12 +1,14 @@
 import copy
 import logging
 
+import requests
+
 from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import (get_multiline_input, input_int, input_str,
                                    input_yes_no)
 from src.utils.mapping import (ignored_tables, map_field_ids_by_table_id,
-                               replace_table_names_in_query, table_mapping_nw,
-                               table_mapping_sr)
+                               replace_table_names_in_query, table_mapping_bl,
+                               table_mapping_nw, table_mapping_sr)
 from src.utils.print_cards import print_card_details
 from src.utils.screen_contact import clear_screen
 
@@ -49,8 +51,6 @@ def find_new_table_id(old_table_id: int, old_tables: list[dict],
     old_table = next(
         (t for t in old_tables if t.get('table_id') == old_table_id), None)
     if not old_table:
-        logger.warning('Không tìm thấy old_table_id %s trong old_tables',
-                       old_table_id)
         TABLE_ID_CACHE[old_table_id] = None
         return None
 
@@ -74,9 +74,6 @@ def find_new_table_id(old_table_id: int, old_tables: list[dict],
 
     TABLE_ID_CACHE[old_table_id] = new_table.get(
         'table_id') if new_table else None
-    if not new_table:
-        logger.warning('Không tìm thấy new_table cho old_table %s (%s)',
-                       old_table_name, old_table_id)
     return TABLE_ID_CACHE[old_table_id]
 
 
@@ -91,6 +88,23 @@ def remap_field_ids(obj, field_mapping: dict):
         return [remap_field_ids(item, field_mapping) for item in obj]
     if isinstance(obj, dict):
         return {k: remap_field_ids(v, field_mapping) for k, v in obj.items()}
+    return obj
+
+
+def remap_template_tags_in(obj, field_mapping: dict):
+    """Recursively find `template-tags` dicts and remap any ['field', id, ...] dimensions."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == 'template-tags' and isinstance(v, dict):
+                for tag_name, tag_info in v.items():
+                    if isinstance(tag_info, dict) and 'dimension' in tag_info:
+                        tag_info['dimension'] = remap_field_ids(
+                            tag_info['dimension'], field_mapping)
+            else:
+                remap_template_tags_in(v, field_mapping)
+    elif isinstance(obj, list):
+        for item in obj:
+            remap_template_tags_in(item, field_mapping)
     return obj
 
 
@@ -166,39 +180,57 @@ def process_card(manager: MetabaseAPIManager,
                  table_mapping: dict,
                  old_tables: list[dict] = None,
                  new_tables: list[dict] = None) -> dict:
+    card_id = card_detail.get('id')
+    card_name = card_detail.get('name')
+    print(f'[PROCESS] Starting card {card_id}: {card_name}')
+
     updated_card = copy.deepcopy(card_detail)
     dataset_query = updated_card.get('dataset_query', {})
+    # keep a copy of the original dataset_query so we can fully restore it
+    original_dataset_query = copy.deepcopy(dataset_query)
 
     old_db_id = updated_card['database_id']
+    print(f'[PROCESS] Database: {old_db_id} → {new_db_id}')
 
     # Always update database
     updated_card['database_id'] = new_db_id
     dataset_query['database'] = new_db_id
 
     query_type = updated_card.get('query_type')
+    print(f'[PROCESS] Query type: {query_type}')
 
     if updated_card.get('source_card_id') and manager is not None:
+        print(
+            f'[PROCESS] Card has source_card_id: {updated_card.get("source_card_id")}'
+        )
         try:
             updated_card = special_process_card(manager, updated_card)
+            print(f'[PROCESS] Special-processed card')
         except Exception as e:
-            logger.warning(
+            print(
                 f"⚠️ Failed to special-process card {updated_card.get('id')}: {e}"
             )
         return updated_card
 
     if query_type == 'query':
+        print(f'[PROCESS] Processing QUERY type')
         query = dataset_query.get('query', {})
         old_table_id = (query.get('source-table')
                         or query.get('source-query', {}).get('source-table'))
+        print(f'[PROCESS] Old table ID: {old_table_id}')
 
         if not (old_table_id and old_tables and new_tables):
+            print(
+                f'[PROCESS] Missing data: table_id={old_table_id}, old_tables={bool(old_tables)}, new_tables={bool(new_tables)}'
+            )
             return updated_card
 
         new_table_id = find_new_table_id(old_table_id, old_tables, new_tables,
                                          table_mapping)
-        logger.info(f'New table ID resolved: {new_table_id}')
+        print(f'[PROCESS] New table ID resolved: {new_table_id}')
 
         if not new_table_id:
+            print(f'[PROCESS] Could not resolve new table ID')
             return updated_card
 
         # Update the query structure with the new table ID
@@ -207,33 +239,100 @@ def process_card(manager: MetabaseAPIManager,
             query['source-query']['source-table'] = new_table_id
         else:
             query['source-table'] = new_table_id
+        print(f'[PROCESS] Updated table ID in query')
+
         for key in [
                 'breakout', 'aggregation', 'filter', 'expressions', 'order-by'
         ]:
             if key in query:
                 query[key] = remap_field_ids(query[key], global_field_mapping)
+        print(f'[PROCESS] Remapped field IDs')
         dataset_query['query'] = query
 
     elif query_type == 'native':
-        native = dataset_query.get('native', {})
-        sql_query = native.get('query')
-        if sql_query:
-            native['query'], change_db = replace_table_names_in_query(
-                sql_query, table_mapping)
-        if change_db:
-            updated_card['database_id'] = old_db_id
-            dataset_query['database'] = old_db_id
+        print(f'[PROCESS] Processing NATIVE (SQL) type')
+        print(f'[PROCESS] dataset_query keys: {list(dataset_query.keys())}')
+
+        # Support both top-level native and staged MBQL (stages)
+        native = dataset_query.get('native')
+        staged_native = None
+        native_stage_idx = None
+        sql_query = None
+
+        if native:
+            # top-level: support {'query': ...} or {'native': ...}
+            sql_query = native.get('query') or native.get('native')
+            native_location = ('top', None)
         else:
+            stages = dataset_query.get('stages') or []
+            for idx, st in enumerate(stages):
+                if st.get('lib/type') == 'mbql.stage/native' or 'native' in st:
+                    staged_native = st
+                    native_stage_idx = idx
+                    sql_query = st.get('native') or st.get('query')
+                    native_location = ('stage', idx)
+                    break
+
+        print(
+            f'[PROCESS] Original SQL: {sql_query[:100] if sql_query else "None"}...'
+        )
+
+        change_db = False
+        if sql_query:
+            new_sql, change_db = replace_table_names_in_query(
+                sql_query, table_mapping)
+            print(
+                f'[PROCESS] SQL after mapping: {new_sql[:100] if new_sql else "None"}...'
+            )
+            print(f'[PROCESS] change_db flag: {change_db}')
+
+            # write back to the correct location
+            if native_location[0] == 'top':
+                if 'query' in native:
+                    native['query'] = new_sql
+                else:
+                    native['native'] = new_sql
+                dataset_query['native'] = native
+            else:
+                dataset_query.setdefault(
+                    'stages', [])[native_stage_idx]['native'] = new_sql
+        else:
+            print(f'[PROCESS] No SQL query found')
+
+        # Always update to new DB (user explicitly selected it)
+        # and remap template-tags for the new DB
+        tags = None
+        if native:
             tags = native.get('template-tags', {})
-            for tag_info in tags.values():
-                dimension = tag_info.get('dimension')
-                if isinstance(dimension, list) and len(
-                        dimension) >= 2 and dimension[0] == 'field':
-                    tag_info['dimension'][1] = global_field_mapping.get(
-                        dimension[1], dimension[1])
-            dataset_query['native'] = native
+        elif staged_native:
+            tags = staged_native.get('template-tags', {})
+
+        for tag_info in (tags.values() if tags else []):
+            dimension = tag_info.get('dimension')
+            if isinstance(
+                    dimension,
+                    list) and len(dimension) >= 2 and dimension[0] == 'field':
+                field_index = None
+                for idx in range(1, len(dimension)):
+                    if isinstance(dimension[idx], int):
+                        field_index = idx
+                        break
+                if field_index is not None:
+                    old_id = dimension[field_index]
+                    new_id = global_field_mapping.get(old_id, old_id)
+                    tag_info['dimension'][field_index] = new_id
+
+        if change_db:
+            print(f'[PROCESS] SQL changed - database_id={new_db_id}')
+        else:
+            print(
+                f'[PROCESS] SQL not changed but updating database_id to {new_db_id}'
+            )
 
     updated_card['dataset_query'] = dataset_query
+    print(
+        f'[PROCESS] Final: DB={updated_card["database_id"]}, changed={updated_card["database_id"] != old_db_id}'
+    )
     return updated_card
 
 
@@ -311,6 +410,14 @@ def update_cards(manager: MetabaseAPIManager):
 
     table_mapping = globals().get(f'table_mapping_{short_db_name}')
 
+    if table_mapping is None:
+        print(f'❌ No table mapping found for database: {db_name}')
+        print(
+            f'Available mappings: table_mapping_nw, table_mapping_sr, table_mapping_bl'
+        )
+        input('🔙 Press Enter to return...')
+        return
+
     global_field_mapping = build_global_field_mapping(first_card_db,
                                                       database_id_new, manager,
                                                       table_mapping)
@@ -348,8 +455,43 @@ def update_cards(manager: MetabaseAPIManager):
             print(f'📝 Card ID: {cid} ({updated_card.get("name")})')
 
             if not dry_run:
-                manager.card.update_specific_card(cid, updated_card)
-                print('✅ Updated successfully.')
+                # Sanitize payload: keep only keys allowed by Metabase update API
+                # Always set new DB and remap template-tags (user explicitly selected new DB)
+                try:
+                    updated_card['database_id'] = database_id_new
+                    updated_card.setdefault('dataset_query',
+                                            {})['database'] = database_id_new
+                    remap_template_tags_in(
+                        updated_card.get('dataset_query', {}),
+                        global_field_mapping)
+                except Exception:
+                    logger.exception(
+                        'Failed to remap template-tags for card %s', cid)
+
+                allowed_keys = {
+                    'name', 'dataset_query', 'display', 'description',
+                    'archived', 'cache_ttl', 'collection_id',
+                    'collection_position', 'collection_preview',
+                    'dashboard_id', 'dashboard_tab_id',
+                    'visualization_settings', 'embedding_params',
+                    'embedding_type'
+                }
+                safe_payload = {
+                    k: v
+                    for k, v in updated_card.items() if k in allowed_keys
+                }
+                try:
+                    manager.card.update_specific_card(cid, safe_payload)
+                    print('✅ Updated successfully.')
+                except requests.exceptions.HTTPError as e:
+                    resp = getattr(e, 'response', None)
+                    print('❌ Update failed with HTTPError')
+                    print('Status:',
+                          resp.status_code if resp is not None else 'N/A')
+                    print('Response body:',
+                          resp.text if resp is not None else 'N/A')
+                    print('Payload sent:', safe_payload)
+                    raise
             else:
                 print('💡 Dry-run only, not applied.')
 

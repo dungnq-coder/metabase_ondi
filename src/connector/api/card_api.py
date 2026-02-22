@@ -37,8 +37,11 @@ class CardAPI(Base):
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
 
-        response = self._get(
-            url=self.get_url(card_id, extra_path=extra)).json()
+        if extra:
+            response = self._get(
+                url=self.get_url(card_id, extra_path=extra)).json()
+        else:
+            response = self._get(url=self.get_url(card_id)).json()
 
         self.set_self_url(original_url)
         return response

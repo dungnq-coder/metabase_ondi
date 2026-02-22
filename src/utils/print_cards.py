@@ -19,6 +19,7 @@ def extract_table_from_sql(query: str) -> str:
 
 
 def print_card_details(data: dict):
+    print(data)
     if not data:
         print('❗ Data empty.')
         return
@@ -43,10 +44,21 @@ def print_card_details(data: dict):
     elif data.get('result_metadata'):
         table_id = data['result_metadata'][0].get('table_id')
 
-    # Native SQL query
-    if dataset_query.get('type') == 'native':
-        sql_query = dataset_query.get('native', {}).get('query', '')
-        table_name = extract_table_from_sql(sql_query)
+    # Determine SQL: support top-level native and staged MBQL (stages)
+    sql_query = None
+    # top-level native (common shape)
+    native = dataset_query.get('native')
+    if native:
+        sql_query = native.get('query') or native.get('native')
+    else:
+        # staged MBQL: look for a stage with native SQL
+        stages = dataset_query.get('stages') or []
+        for st in stages:
+            if st.get('lib/type') == 'mbql.stage/native' or 'native' in st:
+                sql_query = st.get('native') or st.get('query')
+                break
+
+    table_name = extract_table_from_sql(sql_query)
 
     print(f"📋 Table ID       : {table_id or 'N/A'}")
     print(f"📋 Table Name     : {table_name or 'N/A'}")
@@ -92,7 +104,14 @@ def print_card_details(data: dict):
             print(f'       - Nil %        : {nil_pct}')
 
     # ---- Query ----
-    native_query = dataset_query.get('native', {}).get('query', 'N/A')
-    print(f'\n🔍 Query:\n{native_query}')
+    display_sql = 'N/A'
+    if sql_query:
+        display_sql = sql_query
+    else:
+        # fallback: show top-level native if present
+        if dataset_query.get('native'):
+            nn = dataset_query.get('native')
+            display_sql = nn.get('query') or nn.get('native') or 'N/A'
+    print(f'\n🔍 Query:\n{display_sql}')
 
     print('=' * 60)

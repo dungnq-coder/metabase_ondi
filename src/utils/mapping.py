@@ -75,6 +75,17 @@ table_mapping_nw = {
     'island-battle.dashboard_table.huynn_is_resource_management_by_source',
 }
 
+table_mapping_bl = {
+    'fortias-saga.flattened_table.huynn_dh_active_daily':
+    'pack-adventure.dashboard_table.bp_active_daily',
+    'fortias-saga.flattened_table.huynn_dh_campaign_progress':
+    'pack-adventure.dashboard_table.bp_campaign_progress',
+    'fortias-saga.huynn_temp_table.dh_iaa_dashboard':
+    'pack-adventure.dashboard_table.bp_iaa_dashboard',
+    'fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard':
+    'pack-adventure.dashboard_table.bp_ad_placement'
+}
+
 ignored_tables = {
     'data_billing.gcp_billing_export_v1_01D065_6EF44D_70BCA6',
     'flattened_table.test_dh_ads',
@@ -94,6 +105,11 @@ rename_sr = {
 rename_nw = {
     "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
     "('North War Android','com.bgg.island.battle')"
+}
+
+rename_bl = {
+    "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
+    "('Backpack Legends')"
 }
 
 
