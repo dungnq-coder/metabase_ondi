@@ -79,12 +79,27 @@ def find_new_table_id(old_table_id: int, old_tables: list[dict],
 
 def remap_field_ids(obj, field_mapping: dict):
     if isinstance(obj, list):
-        if len(obj) >= 2 and obj[0] == 'field' and isinstance(obj[1], int):
-            old_id = obj[1]
-            new_id = field_mapping.get(old_id, old_id)
-            return ['field', new_id] + [
-                remap_field_ids(item, field_mapping) for item in obj[2:]
-            ]
+        # Handle Metabase field refs that can be either:
+        # ['field', <id>, ...] or ['field', {meta}, <id>, ...]
+        if len(obj) >= 2 and obj[0] == 'field':
+            # find first integer index after position 0
+            field_idx = None
+            for idx in range(1, len(obj)):
+                if isinstance(obj[idx], int):
+                    field_idx = idx
+                    break
+            if field_idx is not None:
+                old_id = obj[field_idx]
+                new_id = field_mapping.get(old_id, old_id)
+                new_list = []
+                for i, item in enumerate(obj):
+                    if i == field_idx:
+                        new_list.append(new_id)
+                    elif i == 0:
+                        new_list.append('field')
+                    else:
+                        new_list.append(remap_field_ids(item, field_mapping))
+                return new_list
         return [remap_field_ids(item, field_mapping) for item in obj]
     if isinstance(obj, dict):
         return {k: remap_field_ids(v, field_mapping) for k, v in obj.items()}
@@ -105,6 +120,46 @@ def remap_template_tags_in(obj, field_mapping: dict):
     elif isinstance(obj, list):
         for item in obj:
             remap_template_tags_in(item, field_mapping)
+    return obj
+
+
+def remove_unmapped_template_tags(obj, field_mapping: dict):
+    """Remove template-tags entries whose `dimension` refers to a field id
+    that could not be mapped to the target DB (to avoid Metabase validation errors)."""
+    if not isinstance(obj, dict):
+        return obj
+
+    if 'template-tags' in obj and isinstance(obj['template-tags'], dict):
+        tags = obj['template-tags']
+        to_delete = []
+        for tag_name, tag_info in tags.items():
+            if isinstance(tag_info, dict) and 'dimension' in tag_info:
+                dim = tag_info['dimension']
+                # find first integer in dim
+                field_idx = None
+                if isinstance(dim, list):
+                    for idx in range(1, len(dim)):
+                        if isinstance(dim[idx], int):
+                            field_idx = idx
+                            break
+                if field_idx is not None:
+                    old_id = dim[field_idx]
+                    new_id = field_mapping.get(old_id)
+                    if not new_id or new_id == old_id:
+                        # unmapped — remove the template tag to avoid validation error
+                        to_delete.append(tag_name)
+        for name in to_delete:
+            tags.pop(name, None)
+
+    # recurse into nested structures
+    for k, v in list(obj.items()):
+        if isinstance(v, dict):
+            remove_unmapped_template_tags(v, field_mapping)
+        elif isinstance(v, list):
+            for item in v:
+                if isinstance(item, dict):
+                    remove_unmapped_template_tags(item, field_mapping)
+
     return obj
 
 
@@ -214,9 +269,29 @@ def process_card(manager: MetabaseAPIManager,
 
     if query_type == 'query':
         print(f'[PROCESS] Processing QUERY type')
-        query = dataset_query.get('query', {})
-        old_table_id = (query.get('source-table')
-                        or query.get('source-query', {}).get('source-table'))
+        print(f'[PROCESS] dataset_query keys: {list(dataset_query.keys())}')
+
+        # Support both the compact MBQL (`dataset_query['query']`) and
+        # the full staged MBQL which places pieces directly on
+        # `dataset_query` (has 'stages', 'expressions', 'breakout', ...).
+        query = dataset_query.get('query') or dataset_query
+        is_full_mbql = 'query' not in dataset_query
+
+        # Try to discover the old table id from several possible locations
+        old_table_id = None
+        if isinstance(query, dict):
+            old_table_id = (query.get('source-table') or query.get(
+                'source-query', {}).get('source-table'))
+            if not old_table_id and isinstance(query.get('stages'), list):
+                for st in query.get('stages', []):
+                    if st.get('source-table'):
+                        old_table_id = st.get('source-table')
+                        break
+
+        # Fallback to top-level card.table_id (some cards include it)
+        if not old_table_id:
+            old_table_id = updated_card.get('table_id')
+
         print(f'[PROCESS] Old table ID: {old_table_id}')
 
         if not (old_table_id and old_tables and new_tables):
@@ -233,21 +308,59 @@ def process_card(manager: MetabaseAPIManager,
             print(f'[PROCESS] Could not resolve new table ID')
             return updated_card
 
-        # Update the query structure with the new table ID
-        source_query = query.get('source-query')
-        if source_query is not None:
-            query['source-query']['source-table'] = new_table_id
+        # Update table_id references in staged MBQL or in query object
+        if is_full_mbql:
+            for st in query.get('stages', []):
+                if 'source-table' in st and st.get(
+                        'source-table') == old_table_id:
+                    st['source-table'] = new_table_id
+                # remap any field refs inside the stage
+                remap_field_ids(st, global_field_mapping)
+            # also remap top-level expressions/breakout if present
+            for key in [
+                    'breakout', 'aggregation', 'filter', 'expressions',
+                    'order-by'
+            ]:
+                if key in query:
+                    query[key] = remap_field_ids(query[key],
+                                                 global_field_mapping)
+            # update card-level table_id if present
+            updated_card['table_id'] = new_table_id
         else:
-            query['source-table'] = new_table_id
-        print(f'[PROCESS] Updated table ID in query')
+            source_query = query.get('source-query')
+            if source_query is not None:
+                query['source-query']['source-table'] = new_table_id
+            else:
+                query['source-table'] = new_table_id
+            for key in [
+                    'breakout', 'aggregation', 'filter', 'expressions',
+                    'order-by'
+            ]:
+                if key in query:
+                    query[key] = remap_field_ids(query[key],
+                                                 global_field_mapping)
 
-        for key in [
-                'breakout', 'aggregation', 'filter', 'expressions', 'order-by'
-        ]:
-            if key in query:
-                query[key] = remap_field_ids(query[key], global_field_mapping)
-        print(f'[PROCESS] Remapped field IDs')
-        dataset_query['query'] = query
+        print(f'[PROCESS] Updated table ID and remapped field IDs')
+
+        # Remap result_metadata field refs and table_id entries
+        try:
+            for md in updated_card.get('result_metadata', []) or []:
+                if isinstance(md, dict):
+                    if 'field_ref' in md and isinstance(md['field_ref'], list):
+                        md['field_ref'] = remap_field_ids(
+                            md['field_ref'], global_field_mapping)
+                    if md.get('table_id') == old_table_id:
+                        md['table_id'] = new_table_id
+        except Exception:
+            logger.exception('Failed to remap result_metadata for card %s',
+                             card_id)
+
+        # ensure dataset_query is updated when original used top-level pieces
+        if 'query' in dataset_query:
+            dataset_query['query'] = query
+        else:
+            # when we modified `query` in-place above (is_full_mbql), dataset_query already points to it
+            dataset_query = query
 
     elif query_type == 'native':
         print(f'[PROCESS] Processing NATIVE (SQL) type')
@@ -462,6 +575,10 @@ def update_cards(manager: MetabaseAPIManager):
                     updated_card.setdefault('dataset_query',
                                             {})['database'] = database_id_new
                     remap_template_tags_in(
+                        updated_card.get('dataset_query', {}),
+                        global_field_mapping)
+                    # Remove any remaining template-tags that couldn't be mapped
+                    remove_unmapped_template_tags(
                         updated_card.get('dataset_query', {}),
                         global_field_mapping)
                 except Exception:

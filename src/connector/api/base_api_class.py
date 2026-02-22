@@ -61,6 +61,9 @@ class Base:
 
     def get_param_url(self) -> str:
         url = self._api_url.rstrip('/')
+        # If the URL already includes a positional placeholder, don't add another.
+        if '{}' in url:
+            return url
         return url + '/{}'
 
     def get_self_url(self) -> str:
