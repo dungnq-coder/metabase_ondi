@@ -83,7 +83,7 @@ table_mapping_bl = {
     'fortias-saga.huynn_temp_table.dh_iaa_dashboard':
     'pack-adventure.dashboard_table.bp_iaa_dashboard',
     'fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard':
-    'pack-adventure.dashboard_table.bp_ad_placement'
+    'pack-adventure.dashboard_table.bp_iaa_placement_dashboard'
 }
 
 ignored_tables = {

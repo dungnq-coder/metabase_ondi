@@ -1,4 +1,6 @@
 # src/utils/print_databases.py
+import pandas as pd
+
 from .format_time import format_time
 from .icons import icon_bool
 

@@ -28,7 +28,11 @@ class DatabaseAPI(Base):
         """
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
-        params = {}
+        params = {
+            'include': 'tables',
+            'include_editable_data_model': 'true',
+            'exclude_uneditable_details': 'true'
+        }
 
         response = self._get(url=self.get_url(database_id, extra_path=extra),
                              params=params)
