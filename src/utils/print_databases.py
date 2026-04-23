@@ -51,6 +51,12 @@ def print_database_details(db: dict):
     if not db:
         print('❗ Database data is empty.')
         return
+    
+    # output_path = f"database_{db.get('id', 'unknown')}_details.csv"
+    # df = pd.json_normalize(db)  # flatten nested dict
+    # df.T.to_csv(output_path, header=False)  # transpose cho dễ đọc
+
+    # print(f"✅ Exported database details to {output_path}")
 
     print('\nDatabase Details')
     print('=' * 60)

@@ -57,10 +57,13 @@ def find_new_table_id(old_table_id: int, old_tables: list[dict],
     old_table_name = old_table.get('table_name', '')
     old_table_name_short = old_table_name.split('.')[-1]
 
-    # Tìm mapping từ table_mapping
-    mapped_full = next((new_full
-                        for full_old, new_full in table_mapping.items()
-                        if full_old.endswith(old_table_name_short)), None)
+    # Tìm mapping theo full name trước, fallback sang short name
+    mapped_full = table_mapping.get(old_table_name)
+    if not mapped_full:
+        mapped_full = next((new_full
+                            for full_old, new_full in table_mapping.items()
+                            if full_old.split('.')[-1] == old_table_name_short),
+                           None)
     if mapped_full:
         mapped_table_name_short = mapped_full.split('.')[-1]
     else:
@@ -124,14 +127,13 @@ def remap_template_tags_in(obj, field_mapping: dict):
 
 
 def remove_unmapped_template_tags(obj, field_mapping: dict):
-    """Remove template-tags entries whose `dimension` refers to a field id
-    that could not be mapped to the target DB (to avoid Metabase validation errors)."""
+    """Keep template-tags and remap their field ids when possible.
+    Unmapped field ids are preserved (no tag deletion)."""
     if not isinstance(obj, dict):
         return obj
 
     if 'template-tags' in obj and isinstance(obj['template-tags'], dict):
         tags = obj['template-tags']
-        to_delete = []
         for tag_name, tag_info in tags.items():
             if isinstance(tag_info, dict) and 'dimension' in tag_info:
                 dim = tag_info['dimension']
@@ -145,11 +147,12 @@ def remove_unmapped_template_tags(obj, field_mapping: dict):
                 if field_idx is not None:
                     old_id = dim[field_idx]
                     new_id = field_mapping.get(old_id)
-                    if not new_id or new_id == old_id:
-                        # unmapped — remove the template tag to avoid validation error
-                        to_delete.append(tag_name)
-        for name in to_delete:
-            tags.pop(name, None)
+                    if new_id and new_id != old_id:
+                        dim[field_idx] = new_id
+                    else:
+                        logger.warning(
+                            "Template tag '%s' keeps unmapped field id %s",
+                            tag_name, old_id)
 
     # recurse into nested structures
     for k, v in list(obj.items()):
@@ -161,6 +164,93 @@ def remove_unmapped_template_tags(obj, field_mapping: dict):
                     remove_unmapped_template_tags(item, field_mapping)
 
     return obj
+
+
+def remap_template_tags_with_table_fallback(dataset_query: dict,
+                                            field_mapping: dict,
+                                            old_fields: list[dict],
+                                            new_fields: list[dict],
+                                            old_tables: list[dict],
+                                            new_tables: list[dict],
+                                            table_mapping: dict):
+    """Remap template-tag field ids with fallback by old-field metadata.
+
+    Priority:
+    1) direct old_id -> new_id from field_mapping
+    2) old field metadata (name + table_id) -> mapped new table_id -> new field id
+    3) fallback by field name globally in target DB
+    """
+    if not isinstance(dataset_query, dict):
+        return []
+
+    old_field_by_id = {f.get('id'): f for f in old_fields if isinstance(f, dict)}
+    new_field_by_table_and_name = {
+        (f.get('table_id'), (f.get('name') or '').lower()): f.get('id')
+        for f in new_fields if isinstance(f, dict)
+    }
+    new_field_by_name = {
+        (f.get('name') or '').lower(): f.get('id')
+        for f in new_fields if isinstance(f, dict)
+    }
+
+    unresolved = []
+
+    def _walk(obj):
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k == 'template-tags' and isinstance(v, dict):
+                    for tag_name, tag_info in v.items():
+                        if not isinstance(tag_info, dict):
+                            continue
+                        dim = tag_info.get('dimension')
+                        if not (isinstance(dim, list) and len(dim) >= 2
+                                and dim[0] == 'field'):
+                            continue
+
+                        field_idx = None
+                        for idx in range(1, len(dim)):
+                            if isinstance(dim[idx], int):
+                                field_idx = idx
+                                break
+                        if field_idx is None:
+                            continue
+
+                        old_id = dim[field_idx]
+                        new_id = field_mapping.get(old_id)
+
+                        if not new_id:
+                            old_field = old_field_by_id.get(old_id)
+                            if old_field:
+                                old_name = (old_field.get('name') or '').lower()
+                                old_table_id = old_field.get('table_id')
+                                new_table_id = find_new_table_id(
+                                    old_table_id, old_tables, new_tables,
+                                    table_mapping) if old_table_id else None
+                                if new_table_id and old_name:
+                                    new_id = new_field_by_table_and_name.get(
+                                        (new_table_id, old_name))
+                                if not new_id and old_name:
+                                    new_id = new_field_by_name.get(old_name)
+
+                        if not new_id:
+                            tag_key_name = (tag_info.get('name')
+                                            or tag_name or '').lower()
+                            if tag_key_name:
+                                new_id = new_field_by_name.get(tag_key_name)
+
+                        if new_id:
+                            dim[field_idx] = new_id
+                            field_mapping[old_id] = new_id
+                        else:
+                            unresolved.append((tag_name, old_id))
+                else:
+                    _walk(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item)
+
+    _walk(dataset_query)
+    return unresolved
 
 
 def build_global_field_mapping(old_db_id: int, new_db_id: int,
@@ -310,12 +400,13 @@ def process_card(manager: MetabaseAPIManager,
 
         # Update table_id references in staged MBQL or in query object
         if is_full_mbql:
-            for st in query.get('stages', []):
+            for idx, st in enumerate(query.get('stages', [])):
                 if 'source-table' in st and st.get(
                         'source-table') == old_table_id:
                     st['source-table'] = new_table_id
                 # remap any field refs inside the stage
-                remap_field_ids(st, global_field_mapping)
+                query['stages'][idx] = remap_field_ids(
+                    st, global_field_mapping)
             # also remap top-level expressions/breakout if present
             for key in [
                     'breakout', 'aggregation', 'filter', 'expressions',
@@ -531,9 +622,12 @@ def update_cards(manager: MetabaseAPIManager):
         input('🔙 Press Enter to return...')
         return
 
-    global_field_mapping = build_global_field_mapping(first_card_db,
-                                                      database_id_new, manager,
-                                                      table_mapping)
+    # avoid stale table-id cache across different update runs
+    global TABLE_ID_CACHE
+    TABLE_ID_CACHE = {}
+
+    # cache field mapping by source DB (cards in selection can come from multiple DBs)
+    field_mapping_by_old_db = {}
     dry_run = not input_yes_no(
         'Do you want to APPLY changes? (Answer NO to perform a dry-run)')
     if dry_run:
@@ -542,6 +636,7 @@ def update_cards(manager: MetabaseAPIManager):
         )
 
     tables_cache = {}
+    fields_cache = {}
     for cid in card_ids:
         try:
             card_detail = manager.card.get_card_detail(cid)
@@ -555,11 +650,22 @@ def update_cards(manager: MetabaseAPIManager):
                                 db_id)
                     except Exception:
                         tables_cache[db_id] = []
+                if db_id not in fields_cache:
+                    try:
+                        fields_cache[
+                            db_id] = manager.database.get_fields_in_specific_db(
+                                db_id)
+                    except Exception:
+                        fields_cache[db_id] = []
+
+            if old_db_id not in field_mapping_by_old_db:
+                field_mapping_by_old_db[old_db_id] = build_global_field_mapping(
+                    old_db_id, database_id_new, manager, table_mapping)
 
             updated_card = process_card(
                 manager=manager,
                 card_detail=card_detail,
-                global_field_mapping=global_field_mapping,
+                global_field_mapping=field_mapping_by_old_db.get(old_db_id, {}),
                 new_db_id=database_id_new,
                 table_mapping=table_mapping,
                 old_tables=tables_cache.get(old_db_id, []),
@@ -574,13 +680,27 @@ def update_cards(manager: MetabaseAPIManager):
                     updated_card['database_id'] = database_id_new
                     updated_card.setdefault('dataset_query',
                                             {})['database'] = database_id_new
+                    card_field_mapping = field_mapping_by_old_db.get(
+                        old_db_id, {})
+                    unresolved_tags = remap_template_tags_with_table_fallback(
+                        dataset_query=updated_card.get('dataset_query', {}),
+                        field_mapping=card_field_mapping,
+                        old_fields=fields_cache.get(old_db_id, []),
+                        new_fields=fields_cache.get(database_id_new, []),
+                        old_tables=tables_cache.get(old_db_id, []),
+                        new_tables=tables_cache.get(database_id_new, []),
+                        table_mapping=table_mapping)
                     remap_template_tags_in(
                         updated_card.get('dataset_query', {}),
-                        global_field_mapping)
+                        card_field_mapping)
                     # Remove any remaining template-tags that couldn't be mapped
                     remove_unmapped_template_tags(
                         updated_card.get('dataset_query', {}),
-                        global_field_mapping)
+                        card_field_mapping)
+                    if unresolved_tags:
+                        logger.warning(
+                            'Card %s still has %d unresolved template tags: %s',
+                            cid, len(unresolved_tags), unresolved_tags)
                 except Exception:
                     logger.exception(
                         'Failed to remap template-tags for card %s', cid)

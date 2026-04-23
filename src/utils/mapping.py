@@ -80,10 +80,16 @@ table_mapping_bl = {
     'pack-adventure.dashboard_table.bp_active_daily',
     'fortias-saga.flattened_table.huynn_dh_campaign_progress':
     'pack-adventure.dashboard_table.bp_campaign_progress',
+    'fortias-saga.huynn_temp_table.dh_feature_max_stage':
+    'pack-adventure.dashboard_table.bp_feature_max_stage',
     'fortias-saga.huynn_temp_table.dh_iaa_dashboard':
     'pack-adventure.dashboard_table.bp_iaa_dashboard',
     'fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard':
-    'pack-adventure.dashboard_table.bp_iaa_placement_dashboard'
+    'pack-adventure.dashboard_table.bp_iaa_placement_dashboard',
+    'fortias-saga.huynn_temp_table.level_mode_summary':
+    'pack-adventure.dashboard_table.bp_level_mode_summary',
+    'fortias-saga.flattened_table.huynn_dh_tutorial':
+    'pack-adventure.dashboard_table.bp_tutorial'
 }
 
 ignored_tables = {

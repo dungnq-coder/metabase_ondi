@@ -1,4 +1,5 @@
 # src/utils/print_cards.py
+from pprint import pprint
 import re
 
 from .format_time import format_time
@@ -23,6 +24,8 @@ def print_card_details(data: dict):
     if not data:
         print('❗ Data empty.')
         return
+    
+    pprint(data)
 
     print('\n📄 Card Details:')
     print('=' * 60)
