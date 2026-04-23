@@ -17,12 +17,12 @@ class CardAPI(Base):
         """Get list of dashboards containing a specific card."""
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
-
-        response = self._get(
-            url=self.get_url(card_id, extra_path='dashboards')).json()
-
-        self.set_self_url(original_url)
-        return response
+        try:
+            response = self._get(
+                url=self.get_url(card_id, extra_path='dashboards')).json()
+            return response
+        finally:
+            self.set_self_url(original_url)
 
     def get_card_detail(self, card_id: int, extra: str = None):
         """
@@ -36,15 +36,15 @@ class CardAPI(Base):
         """
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
-
-        if extra:
-            response = self._get(
-                url=self.get_url(card_id, extra_path=extra)).json()
-        else:
-            response = self._get(url=self.get_url(card_id)).json()
-
-        self.set_self_url(original_url)
-        return response
+        try:
+            if extra:
+                response = self._get(
+                    url=self.get_url(card_id, extra_path=extra)).json()
+            else:
+                response = self._get(url=self.get_url(card_id)).json()
+            return response
+        finally:
+            self.set_self_url(original_url)
 
     def post_card_action(self,
                          card_id: int,
@@ -57,20 +57,22 @@ class CardAPI(Base):
         """
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
-
-        response = self._post(url=self.get_url(card_id, extra_path=action),
-                              json_data=payload or {}).json()
-
-        self.set_self_url(original_url)
-        return response
+        try:
+            response = self._post(url=self.get_url(card_id, extra_path=action),
+                                  json_data=payload or {}).json()
+            return response
+        finally:
+            self.set_self_url(original_url)
 
     def delete_specific_card(self, card_id: int):
         """Delete specific card by ID."""
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
-        response = self._delete(url=self.get_url(card_id))
-        self.set_self_url(original_url)
-        return response
+        try:
+            response = self._delete(url=self.get_url(card_id))
+            return response
+        finally:
+            self.set_self_url(original_url)
 
     def get_update_payload(
             self,
@@ -140,7 +142,9 @@ class CardAPI(Base):
         """Update specific card by ID."""
         original_url = self.get_self_url()
         self.set_self_url(self.get_param_url())
-        response = self._put(url=self.get_url(card_id),
-                             json_data=payload or {})
-        self.set_self_url(original_url)
-        return response
+        try:
+            response = self._put(url=self.get_url(card_id),
+                                 json_data=payload or {})
+            return response
+        finally:
+            self.set_self_url(original_url)

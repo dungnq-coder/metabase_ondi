@@ -115,7 +115,7 @@ rename_nw = {
 
 rename_bl = {
     "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')":
-    "('Backpack Legends')"
+    "('Backpack Legends_Android','Backpack Legends_iOS')"
 }
 
 

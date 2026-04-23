@@ -1,5 +1,6 @@
 import copy
 import logging
+import re
 
 import requests
 
@@ -7,6 +8,7 @@ from src.connector.manager import MetabaseAPIManager
 from src.utils.input_utils import (get_multiline_input, input_int, input_str,
                                    input_yes_no)
 from src.utils.mapping import (ignored_tables, map_field_ids_by_table_id,
+                               rename_bl, rename_nw, rename_sr,
                                replace_table_names_in_query, table_mapping_bl,
                                table_mapping_nw, table_mapping_sr)
 from src.utils.print_cards import print_card_details
@@ -16,6 +18,16 @@ logger = logging.getLogger(__name__)
 
 # --- Global cache ---
 TABLE_ID_CACHE = {}
+TABLE_MAPPING_BY_KEY = {
+    'sr': table_mapping_sr,
+    'nw': table_mapping_nw,
+    'bl': table_mapping_bl,
+}
+RENAME_BY_KEY = {
+    'sr': rename_sr,
+    'nw': rename_nw,
+    'bl': rename_bl,
+}
 
 
 def list_cards(manager: MetabaseAPIManager):
@@ -183,15 +195,191 @@ def remap_template_tags_with_table_fallback(dataset_query: dict,
     if not isinstance(dataset_query, dict):
         return []
 
+    def normalize_name(value):
+        if not value:
+            return None
+        return str(value).strip().strip('`').lower()
+
+    def extract_alias_candidates(value):
+        if not value:
+            return []
+
+        candidates = []
+        raw = str(value).strip()
+        cleaned = raw.replace('`', '')
+        last_segment = cleaned.split('.')[-1].strip()
+        if last_segment:
+            candidates.append(last_segment.lower())
+
+        for match in re.findall(r'([A-Za-z_][A-Za-z0-9_]*)', cleaned):
+            candidates.append(match.lower())
+
+        return candidates
+
+    def candidate_names_for_tag(tag_name, tag_info, old_field):
+        candidates = []
+
+        def add_candidate(value):
+            normalized = normalize_name(value)
+            if normalized:
+                candidates.append(normalized)
+
+        def add_alias_candidates(value):
+            for candidate in extract_alias_candidates(value):
+                add_candidate(candidate)
+
+        if old_field:
+            add_candidate(old_field.get('name'))
+            add_candidate(old_field.get('display_name'))
+            add_alias_candidates(old_field.get('nfc_path'))
+
+        if isinstance(tag_info, dict):
+            add_candidate(tag_info.get('name'))
+            add_candidate(tag_info.get('display-name'))
+            add_alias_candidates(tag_info.get('alias'))
+
+        add_candidate(tag_name)
+
+        is_date_like = False
+        base_type = None
+        effective_type = None
+        dimension = tag_info.get('dimension') if isinstance(tag_info,
+                                                            dict) else None
+        if isinstance(dimension, list):
+            for item in dimension:
+                if isinstance(item, dict):
+                    base_type = item.get('base-type') or base_type
+                    effective_type = item.get('effective-type'
+                                              ) or effective_type
+        widget_type = (tag_info.get('widget-type')
+                       if isinstance(tag_info, dict) else None) or ''
+        if 'date' in widget_type.lower():
+            is_date_like = True
+        if any('date' in str(v).lower()
+               for v in (base_type, effective_type,
+                         old_field.get('name') if old_field else None, tag_name,
+                         tag_info.get('display-name')
+                         if isinstance(tag_info, dict) else None)):
+            is_date_like = True
+
+        if is_date_like:
+            for generic_name in (
+                    'date',
+                    'event_date',
+                    'created_date',
+                    'created_at',
+                    'install_date',
+                    'transaction_date',
+            ):
+                add_candidate(generic_name)
+
+        seen = set()
+        ordered = []
+        for candidate in candidates:
+            if candidate not in seen:
+                seen.add(candidate)
+                ordered.append(candidate)
+        return ordered
+
+    def is_date_field(field):
+        if not isinstance(field, dict):
+            return False
+        values = [
+            field.get('name'),
+            field.get('display_name'),
+            field.get('base_type'),
+            field.get('effective_type'),
+            field.get('semantic_type'),
+        ]
+        return any(v and 'date' in str(v).lower() for v in values)
+
+    def pick_date_field_fallback(new_table_id, candidate_names):
+        table_date_fields = [
+            field for field in new_fields
+            if isinstance(field, dict) and field.get('table_id') == new_table_id
+            and is_date_field(field)
+        ]
+        if not table_date_fields:
+            return None
+
+        normalized_priority = []
+        for name in candidate_names + [
+                'date', 'event_date', 'created_date', 'created_at'
+        ]:
+            normalized = normalize_name(name)
+            if normalized and normalized not in normalized_priority:
+                normalized_priority.append(normalized)
+
+        for preferred_name in normalized_priority:
+            for field in table_date_fields:
+                if normalize_name(field.get('name')) == preferred_name:
+                    return field.get('id')
+
+        if len(table_date_fields) == 1:
+            return table_date_fields[0].get('id')
+
+        for field in table_date_fields:
+            field_name = normalize_name(field.get('name'))
+            if field_name in {'date', 'event_date', 'created_date'}:
+                return field.get('id')
+
+        return None
+
+    def infer_target_table_ids_from_dataset_query():
+        sql_chunks = []
+
+        native = dataset_query.get('native')
+        if isinstance(native, dict):
+            sql_chunks.extend(
+                v for v in (native.get('query'), native.get('native'))
+                if isinstance(v, str))
+
+        stages = dataset_query.get('stages') or []
+        for stage in stages:
+            if not isinstance(stage, dict):
+                continue
+            native_sql = stage.get('native')
+            if isinstance(native_sql, str):
+                sql_chunks.append(native_sql)
+            query_sql = stage.get('query')
+            if isinstance(query_sql, str):
+                sql_chunks.append(query_sql)
+
+        table_ids = []
+        seen = set()
+        for sql in sql_chunks:
+            for table_name in re.findall(r'`([^`]+)`', sql):
+                matched_table = next(
+                    (table for table in new_tables
+                     if table.get('table_name') == table_name
+                     or table.get('table_name', '').split('.')[-1]
+                     == table_name.split('.')[-1]), None)
+                if matched_table:
+                    table_id = matched_table.get('table_id')
+                    if table_id and table_id not in seen:
+                        seen.add(table_id)
+                        table_ids.append(table_id)
+        return table_ids
+
     old_field_by_id = {f.get('id'): f for f in old_fields if isinstance(f, dict)}
+    inferred_target_table_ids = infer_target_table_ids_from_dataset_query()
     new_field_by_table_and_name = {
-        (f.get('table_id'), (f.get('name') or '').lower()): f.get('id')
+        (f.get('table_id'), normalize_name(f.get('name'))): f.get('id')
         for f in new_fields if isinstance(f, dict)
     }
-    new_field_by_name = {
-        (f.get('name') or '').lower(): f.get('id')
-        for f in new_fields if isinstance(f, dict)
-    }
+    new_field_by_name = {}
+    for field in new_fields:
+        if not isinstance(field, dict):
+            continue
+        field_id = field.get('id')
+        for key in (
+                field.get('name'),
+                field.get('display_name'),
+                field.get('semantic_type'),
+        ):
+            normalized = normalize_name(key)
+            if normalized and normalized not in new_field_by_name:
+                new_field_by_name[normalized] = field_id
 
     unresolved = []
 
@@ -217,32 +405,42 @@ def remap_template_tags_with_table_fallback(dataset_query: dict,
 
                         old_id = dim[field_idx]
                         new_id = field_mapping.get(old_id)
+                        old_field = old_field_by_id.get(old_id)
+                        candidate_names = candidate_names_for_tag(
+                            tag_name, tag_info, old_field)
 
                         if not new_id:
-                            old_field = old_field_by_id.get(old_id)
                             if old_field:
-                                old_name = (old_field.get('name') or '').lower()
                                 old_table_id = old_field.get('table_id')
                                 new_table_id = find_new_table_id(
                                     old_table_id, old_tables, new_tables,
                                     table_mapping) if old_table_id else None
-                                if new_table_id and old_name:
-                                    new_id = new_field_by_table_and_name.get(
-                                        (new_table_id, old_name))
-                                if not new_id and old_name:
-                                    new_id = new_field_by_name.get(old_name)
+                                if new_table_id:
+                                    for candidate in candidate_names:
+                                        new_id = new_field_by_table_and_name.get(
+                                            (new_table_id, candidate))
+                                        if new_id:
+                                            break
+                                    if not new_id:
+                                        new_id = pick_date_field_fallback(
+                                            new_table_id, candidate_names)
+                            elif len(inferred_target_table_ids) == 1:
+                                new_id = pick_date_field_fallback(
+                                    inferred_target_table_ids[0],
+                                    candidate_names)
 
                         if not new_id:
-                            tag_key_name = (tag_info.get('name')
-                                            or tag_name or '').lower()
-                            if tag_key_name:
-                                new_id = new_field_by_name.get(tag_key_name)
+                            for candidate in candidate_names:
+                                new_id = new_field_by_name.get(candidate)
+                                if new_id:
+                                    break
 
                         if new_id:
                             dim[field_idx] = new_id
                             field_mapping[old_id] = new_id
                         else:
-                            unresolved.append((tag_name, old_id))
+                            unresolved.append(
+                                (tag_name, old_id, candidate_names))
                 else:
                     _walk(v)
         elif isinstance(obj, list):
@@ -323,6 +521,7 @@ def process_card(manager: MetabaseAPIManager,
                  global_field_mapping: dict,
                  new_db_id: int,
                  table_mapping: dict,
+                 rename_mapping: dict | None = None,
                  old_tables: list[dict] = None,
                  new_tables: list[dict] = None) -> dict:
     card_id = card_detail.get('id')
@@ -484,7 +683,7 @@ def process_card(manager: MetabaseAPIManager,
         change_db = False
         if sql_query:
             new_sql, change_db = replace_table_names_in_query(
-                sql_query, table_mapping)
+                sql_query, table_mapping, rename=rename_mapping or rename_sr)
             print(
                 f'[PROCESS] SQL after mapping: {new_sql[:100] if new_sql else "None"}...'
             )
@@ -588,11 +787,12 @@ def update_cards(manager: MetabaseAPIManager):
 
     print(f'✅ Found {len(card_ids)} card(s) to update.')
 
-    first_card_db = next(
-        (manager.card.get_card_detail(cid).get('database_id')
-         for cid in card_ids
-         if manager.card.get_card_detail(cid).get('database_id') is not None),
-        None)
+    first_card_db = None
+    for cid in card_ids:
+        card_detail = manager.card.get_card_detail(cid)
+        first_card_db = card_detail.get('database_id')
+        if first_card_db is not None:
+            break
 
     database_id_new = input_int(
         'Enter new database ID (leave blank to keep current): ',
@@ -612,7 +812,8 @@ def update_cards(manager: MetabaseAPIManager):
     short_db_name = ''.join(word[0].lower() for word in db_name.split()
                             if word)
 
-    table_mapping = globals().get(f'table_mapping_{short_db_name}')
+    table_mapping = TABLE_MAPPING_BY_KEY.get(short_db_name)
+    rename_mapping = RENAME_BY_KEY.get(short_db_name)
 
     if table_mapping is None:
         print(f'❌ No table mapping found for database: {db_name}')
@@ -668,6 +869,7 @@ def update_cards(manager: MetabaseAPIManager):
                 global_field_mapping=field_mapping_by_old_db.get(old_db_id, {}),
                 new_db_id=database_id_new,
                 table_mapping=table_mapping,
+                rename_mapping=rename_mapping,
                 old_tables=tables_cache.get(old_db_id, []),
                 new_tables=tables_cache.get(database_id_new, []))
 
