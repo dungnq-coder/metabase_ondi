@@ -1,0 +1,15 @@
+# Cross-project constants shared by every ProjectConfig.
+
+# Pivot project: all per-project table_mapping/rename entries are written
+# as <pivot> -> <project>. The registry resolves arbitrary (source, target)
+# directions by inverting/composing through this pivot.
+pivot_short_code: fs
+
+ignored_tables:
+  - data_billing.gcp_billing_export_v1_01D065_6EF44D_70BCA6
+  - flattened_table.test_dh_ads
+  - huynn_temp_table.dh_user_flow
+
+spec_tables:
+  - fortias-saga.singular.creative_data
+  - fortias-saga.singular.marketing_data

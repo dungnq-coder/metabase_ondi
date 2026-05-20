@@ -1,104 +1,48 @@
-import json
-from pathlib import Path
-from pprint import pprint
+"""Metabase Permissions API client."""
 
-from core.base_config import BaseConfig
-from src.connector.api.base_api_class import Base
+from __future__ import annotations
+
+from typing import Any
+
+import requests
+
+from src.connector.api.base_api_class import BaseResource
 
 
-class PermissionsAPI(Base):
+class PermissionsAPI(BaseResource):
+    resource = 'permissions'
 
-    def __init__(self, api_token: str, url: str):
-        super().__init__(api_token)
-        self._api_url = url
+    def get_permissions_detail(
+        self,
+        permissions_id: int | None = None,
+        extra: str | None = None,
+        **kwargs: Any,
+    ) -> requests.Response:
+        """Fetch permissions data.
 
-    def get_permissions_detail(self,
-                               permissions_id: int = None,
-                               extra: str = None,
-                               **kwargs):
+        Routing:
+          - `permissions_id` given → `/permissions/<id>[/<extra>]`
+          - `extra` + `group_id|member_id|database_id` → `/permissions/<extra>/<sub_id>`
+          - `extra` alone → `/permissions/<extra>`
         """
-        General method to get permissions-related details.
-
-        Behavior:
-            1. If permissions_id is provided → use param_url and build .../{id}/{extra}
-            2. If permissions_id is None → use base URL and append /{extra}
-            3. If group_id or member_id is provided → treat as .../{extra}/{id}
-
-        Examples:
-            get_permissions_detail(1, 'graph')
-                → /permissions/1/graph
-
-            get_permissions_detail(extra='graph')
-                → /permissions/graph
-
-            get_permissions_detail(extra='group', group_id=3)
-                → /permissions/group/3
-
-        Args:
-            permissions_id (int, optional): Permission resource ID. If None, uses base URL.
-            extra (str, optional): Additional endpoint (e.g., 'group', 'graph', 'membership').
-            **kwargs: Optional keyword arguments (e.g., group_id=..., member_id=...).
-
-        Returns:
-            requests.Response: API response object.
-        """
-        original_url = self.get_self_url()
-
-        # --- Case 1: permission_id exists -> standard /permissions/{id}/{extra}
         if permissions_id is not None:
-            self.set_self_url(self.get_param_url())
-            target_url = self.get_url(permissions_id, extra_path=extra)
+            if extra:
+                return self._get(permissions_id, extra)
+            return self._get(permissions_id)
 
-        # --- Case 2 & 3: permission_id None
-        else:
-            group_id = kwargs.get('group_id')
-            member_id = kwargs.get('member_id')
-            database_id = kwargs.get('database_id')
+        sub_id = kwargs.get('group_id') or kwargs.get('member_id') or kwargs.get('database_id')
+        if sub_id is not None:
+            return self._get(extra, sub_id)
+        return self._get(extra)
 
-            # Case 3: /permissions/{extra}/{group_id or member_id}
-            if group_id is not None or member_id is not None or database_id is not None:
-                sub_id = group_id or member_id or database_id
-                # set_self_url để format {id} sau extra
-                self.set_self_url(f"{self._api_url.rstrip('/')}/{extra}/{{}}")
-                target_url = self.get_url(sub_id)
+    def post_permissions_action(
+        self, action: str, payload: dict[str, Any] | None = None
+    ) -> requests.Response:
+        return self._post(action, json=payload or {})
 
-            # Case 2: chỉ có /permissions/{extra}
-            else:
-                target_url = self.get_url(extra_path=extra)
-
-        # --- Perform the GET request
-        response = self._get(url=target_url)
-
-        # --- Restore original URL
-        self.set_self_url(original_url)
-        return response
-
-    def post_permissions_action(self, action: str, payload: dict = None):
-        """
-        General method to perform POST actions on a permissions.
-        Examples of `action`:
-            - 'group'
-            - 'membership'
-        """
-
-        response = self._post(url=self.get_url(extra_path=action),
-                              json_data=payload or {})
-
-        return response
-
-    def update_premissions(self, payload: dict):
-        """Update premissions."""
+    def update_premissions(self, payload: dict[str, Any]) -> requests.Response:
         params = {'skip-graph': 'false', 'force': 'false'}
-        response = self._put(url=self.get_url(extra_path='graph'),
-                             json_data=payload or {},
-                             params=params)
-        return response
+        return self._put('graph', json=payload or {}, params=params)
 
-    def delete_specific_permissions(self, permissions_id: int):
-        """Delete specific permissions by ID."""
-        original_url = self.get_self_url()
-        self.set_self_url(self.get_url(extra_path='group'))
-        self.set_self_url(self.get_param_url())
-        response = self._delete(url=self.get_url(permissions_id))
-        self.set_self_url(original_url)
-        return response
+    def delete_specific_permissions(self, permissions_id: int) -> requests.Response:
+        return self._delete('group', permissions_id)

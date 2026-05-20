@@ -1,0 +1,24 @@
+short_code: nw
+display_name: North War (Island Battle)
+
+table_mapping:
+  fortias-saga.flattened_table.huynn_cs_character: island-battle.dashboard_table.huynn_cs_character
+  fortias-saga.flattened_table.huynn_cs_support: island-battle.dashboard_table.huynn_cs_support
+  fortias-saga.flattened_table.character: fortias-saga.dwh_north_war.frb_character_*
+  fortias-saga.flattened_table.equipment: fortias-saga.dwh_north_war.frb_equipment_*
+  fortias-saga.flattened_table.huynn_dh_active_daily: island-battle.dashboard_table.huynn_is_active_daily
+  fortias-saga.flattened_table.huynn_dh_campaign_progress: island-battle.dashboard_table.huynn_is_campaign_progress
+  fortias-saga.flattened_table.huynn_dh_resource_management_raw: island-battle.dashboard_table.huynn_is_resource_management_raw
+  fortias-saga.flattened_table.huynn_dh_resource_top_earn: island-battle.dashboard_table.huynn_is_resource_top_earn
+  fortias-saga.flattened_table.in_app_purchase: fortias-saga.dwh_north_war.frb_in_app_purchase_*
+  fortias-saga.flattened_table.user_engagement: fortias-saga.dwh_north_war.frb_user_engagement_*
+  fortias-saga.huynn_temp_table.dh_feature_max_stage: island-battle.dashboard_table.is_feature_max_stage
+  fortias-saga.huynn_temp_table.dh_iaa_dashboard: island-battle.dashboard_table.is_iaa_dashboard
+  fortias-saga.huynn_temp_table.dh_product_exposure: island-battle.dashboard_table.is_product_exposure
+  fortias-saga.flattened_table.huynn_dh_tutorial: island-battle.dashboard_table.huynn_is_tutorial
+  fortias-saga.huynn_temp_table.level_mode_summary: island-battle.dashboard_table.is_level_mode_summary
+  fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard: island-battle.dashboard_table.is_iaa_placement_dashboard
+  fortias-saga.flattened_table.huynn_dh_resource_management_by_source: island-battle.dashboard_table.huynn_is_resource_management_by_source
+
+rename:
+  "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')": "('North War Android','com.bgg.island.battle')"

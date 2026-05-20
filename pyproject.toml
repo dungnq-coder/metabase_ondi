@@ -1,13 +1,75 @@
 [project]
 name = "metabase-ondi"
 version = "0.1.0"
-description = "Add your description here"
+description = "Metabase CLI tool for bulk card/collection/dashboard operations."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "pandas>=2.3.3",
     "pre-commit>=4.3.0",
     "pybloom-live>=4.0.0",
+    "PyYAML>=6.0",
     "requests>=2.32.5",
-    "yapf>=0.43.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.11",
+    "pytest>=8",
+    "pytest-cov>=5",
+    "responses>=0.25",
+    "ruff>=0.6",
+    "types-PyYAML",
+    "types-requests",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",  # line length handled by formatter
+]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "main.py"]
+ignore_missing_imports = true
+explicit_package_bases = true
+namespace_packages = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+# Strict checking on freshly-written modules.
+[[tool.mypy.overrides]]
+module = [
+    "src.config.*",
+    "src.http.*",
+    "src.mapping.sql_rewriter",
+    "src.mapping.field_mapper",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_return_any = true
+no_implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# Pre-existing untyped CLI rendering helpers; left as-is by this refactor.
+[[tool.mypy.overrides]]
+module = ["src.utils.print_cards"]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

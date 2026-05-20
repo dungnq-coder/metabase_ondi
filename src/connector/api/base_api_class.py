@@ -1,73 +1,52 @@
+"""Base class for Metabase API resource clients."""
+
+from __future__ import annotations
+
+from typing import Any
+
 import requests
 
+from src.http.client import MetabaseClient
 
-class Base:
 
-    def __init__(self, api_token: str, auth_type: str = 'api_key'):
-        self._api_token = api_token
-        self._api_url = ''
-        if auth_type == 'api_key':
-            self._headers = {'x-api-key': api_token}
-        elif auth_type == 'session':
-            self._headers = {'X-Metabase-Session': api_token}
-        else:
-            raise ValueError("auth_type must be 'api_key' or 'session'")
+class BaseResource:
+    """Each subclass binds to a resource path (e.g. 'card', 'dashboard').
 
-    def _request(self,
-                 method: str,
-                 url: str,
-                 *,
-                 params: dict = None,
-                 json_data: dict = None):
-        response = requests.request(method=method,
-                                    url=url,
-                                    headers=self._headers,
-                                    params=params,
-                                    json=json_data)
-        response.raise_for_status()
-        return response
+    All HTTP calls go through a shared `MetabaseClient` (session, retry, timeout).
+    """
 
-    def _get(self, url: str, params: dict = None):
-        return self._request('GET', url, params=params)
+    resource: str = ''
 
-    def _post(self, url: str, json_data: dict = None, params: dict = None):
-        return self._request('POST', url, json_data=json_data, params=params)
+    def __init__(self, client: MetabaseClient, resource: str | None = None) -> None:
+        self._client = client
+        if resource is not None:
+            self.resource = resource
+        if not self.resource:
+            raise ValueError('BaseResource requires a non-empty resource path')
 
-    def _put(self, url: str, json_data: dict = None, params: dict = None):
-        return self._request('PUT', url, json_data=json_data, params=params)
+    # ---- URL helpers ----
+    def url(self, *segments: Any) -> str:
+        return self._client.url(self.resource, *segments)
 
-    def _delete(self, url: str, params: dict = None):
-        return self._request('DELETE', url, params=params)
+    # ---- HTTP shortcuts ----
+    def _get(self, *segments: Any, params: dict[str, Any] | None = None) -> requests.Response:
+        return self._client.get(self.url(*segments), params=params)
 
-    def get_url(self, *args, **kwargs) -> str:
-        """
-        Build URL by formatting self._api_url with positional arguments.
-        Extra path segments (if any) can be passed as kwargs['extra_path'] (optional).
-        """
-        try:
-            base_url = self._api_url.format(*args)
-        except IndexError:
-            raise ValueError(
-                'Not enough arguments provided to format the URL.')
+    def _post(
+        self,
+        *segments: Any,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        return self._client.post(self.url(*segments), json=json, params=params)
 
-        extra_path = kwargs.get('extra_path')
-        if extra_path:
-            if isinstance(extra_path, (list, tuple)):
-                extra = '/'.join(str(p).strip('/') for p in extra_path)
-            else:
-                extra = str(extra_path).strip('/')
-            return f"{base_url.rstrip('/')}/{extra}"
-        return base_url
+    def _put(
+        self,
+        *segments: Any,
+        json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        return self._client.put(self.url(*segments), json=json, params=params)
 
-    def get_param_url(self) -> str:
-        url = self._api_url.rstrip('/')
-        # If the URL already includes a positional placeholder, don't add another.
-        if '{}' in url:
-            return url
-        return url + '/{}'
-
-    def get_self_url(self) -> str:
-        return self._api_url
-
-    def set_self_url(self, url: str) -> None:
-        self._api_url = url
+    def _delete(self, *segments: Any, params: dict[str, Any] | None = None) -> requests.Response:
+        return self._client.delete(self.url(*segments), params=params)

@@ -181,3 +181,67 @@ uv sync --upgrade
 ```
 
 ---
+
+## 🧪 Development
+
+Install dev dependencies (test + lint + type-check tools):
+
+```bash
+uv pip install -e ".[dev]"
+```
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+Lint and format:
+
+```bash
+ruff check src/ core/ tests/ main.py
+ruff format src/ core/ tests/ main.py
+```
+
+Type-check:
+
+```bash
+mypy
+```
+
+---
+
+## 🗺️ Project mappings
+
+Per-project SQL/table rewrites live in `core/projects/<code>.yaml` — one file per
+target project (`sr`, `nw`, `bl`). Shared constants (`ignored_tables`,
+`spec_tables`) live in `core/projects/_global.yaml`. Adding a new project is a
+YAML change, not a code change.
+
+Example skeleton:
+
+```yaml
+short_code: xx
+display_name: Example Project
+table_mapping:
+  source-project.dataset.foo: target-project.dataset.foo
+rename:
+  "('Old App Name')": "('New App Name')"
+```
+
+The short code must match the lowercased initials of the target Metabase
+database name (e.g. database "Sword Rouge Lite" → `sr`).
+
+---
+
+## 🪵 Logging
+
+Set the log level via environment variable:
+
+```bash
+METABASE_CLI_LOG=DEBUG python main.py
+```
+
+Default is `WARNING`. Menu UI output (✅, ❌, prompts) is always printed regardless.
+
+---

@@ -1,10 +1,9 @@
 # src/utils/print_cards.py
-from pprint import pprint
 import re
+from pprint import pprint
 
 from .format_time import format_time
-from .icons import icon_bool, icon_display
-from .permissions import format_permissions
+from .icons import icon_bool
 
 
 def extract_table_from_sql(query: str) -> str:
@@ -24,17 +23,17 @@ def print_card_details(data: dict):
     if not data:
         print('❗ Data empty.')
         return
-    
+
     pprint(data)
 
     print('\n📄 Card Details:')
     print('=' * 60)
 
     # ---- Basic Info ----
-    print(f"🆔 ID             : {data.get('id')}")
-    print(f"📛 Name           : {data.get('name')}")
-    print(f"🗄️ Database ID    : {data.get('database_id')}")
-    print(f"🗂️ Collection ID  : {data.get('collection_id')}")
+    print(f'🆔 ID             : {data.get("id")}')
+    print(f'📛 Name           : {data.get("name")}')
+    print(f'🗄️ Database ID    : {data.get("database_id")}')
+    print(f'🗂️ Collection ID  : {data.get("collection_id")}')
 
     # ---- Table Info ----
     dataset_query = data.get('dataset_query') or {}
@@ -63,29 +62,27 @@ def print_card_details(data: dict):
 
     table_name = extract_table_from_sql(sql_query)
 
-    print(f"📋 Table ID       : {table_id or 'N/A'}")
-    print(f"📋 Table Name     : {table_name or 'N/A'}")
+    print(f'📋 Table ID       : {table_id or "N/A"}')
+    print(f'📋 Table Name     : {table_name or "N/A"}')
 
     # ---- Other Info ----
     dashboard = data.get('dashboard') or {}
     creator = data.get('creator') or {}
 
-    print(f"📊 Display Type   : {data.get('display')}")
+    print(f'📊 Display Type   : {data.get("display")}')
+    print(f'📁 Dashboard      : {dashboard.get("name", "N/A")} (ID: {dashboard.get("id", "N/A")})')
     print(
-        f"📁 Dashboard      : {dashboard.get('name', 'N/A')} (ID: {dashboard.get('id', 'N/A')})"
+        f'👤 Creator        : {creator.get("first_name", "Unknown")} {creator.get("last_name", "")}'.strip()
     )
-    print(
-        f"👤 Creator        : {creator.get('first_name', 'Unknown')} {creator.get('last_name', '')}"
-        .strip())
-    print(f"👁️ View Count     : {data.get('view_count', 0)}")
-    print(f"🕒 Created At     : {format_time(data.get('created_at'))}")
-    print(f"🔄 Updated At     : {format_time(data.get('updated_at'))}")
-    print(f"📅 Last Used At   : {format_time(data.get('last_used_at'))}")
-    print(f"📈 Avg Query Time : {data.get('average_query_time', 'N/A')} ms")
-    print(f"⚙️ Can Write      : {icon_bool(data.get('can_write'))}")
-    print(f"⚙️ Can Delete     : {icon_bool(data.get('can_delete'))}")
-    print(f"⚙️ Can Restore    : {icon_bool(data.get('can_restore'))}")
-    print(f"🗃️ Archived       : {icon_bool(data.get('archived'))}")
+    print(f'👁️ View Count     : {data.get("view_count", 0)}')
+    print(f'🕒 Created At     : {format_time(data.get("created_at"))}')
+    print(f'🔄 Updated At     : {format_time(data.get("updated_at"))}')
+    print(f'📅 Last Used At   : {format_time(data.get("last_used_at"))}')
+    print(f'📈 Avg Query Time : {data.get("average_query_time", "N/A")} ms')
+    print(f'⚙️ Can Write      : {icon_bool(data.get("can_write"))}')
+    print(f'⚙️ Can Delete     : {icon_bool(data.get("can_delete"))}')
+    print(f'⚙️ Can Restore    : {icon_bool(data.get("can_restore"))}')
+    print(f'🗃️ Archived       : {icon_bool(data.get("archived"))}')
 
     # ---- Result Metadata ----
     result_metadata = data.get('result_metadata') or []

@@ -1,0 +1,13 @@
+short_code: fs
+display_name: Fortias Saga
+
+# Aliases match other lowercase-initial encodings of the Metabase database name.
+# Example: a DB named "Fortias Saga DB" computes to "fsd".
+short_code_aliases:
+  - fsd
+
+# Identity project (pivot). Forward mapping is empty: cards already in this
+# DB don't need table-name rewrites when staying in fs. Inverse + cross-project
+# resolution is handled in ProjectRegistry.resolve().
+table_mapping: {}
+rename: {}

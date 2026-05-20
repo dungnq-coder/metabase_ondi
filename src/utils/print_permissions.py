@@ -6,7 +6,7 @@ def print_permissions_list(data: dict):
     revision = data.get('revision', 'N/A')
     groups = data['groups']
 
-    print(f"\nData Permissions (Revision: {revision})\n{'='*80}")
+    print(f'\nData Permissions (Revision: {revision})\n{"=" * 80}')
 
     for g_idx, (group_id, dbs) in enumerate(groups.items()):
         print(f'Group {group_id} [ID: {group_id}]')
@@ -24,8 +24,7 @@ def print_permissions_list(data: dict):
             print(f'{db_branch} Database {db_id} [ID: {db_id}]')
 
             # Extract permissions
-            can_query = 'query-builder-and-native' in perms.get(
-                'create-queries', '')
+            can_query = 'query-builder-and-native' in perms.get('create-queries', '')
             view_data = perms.get('view-data', '')
             download = perms.get('download', {}).get('schemas', '')
             data_model = perms.get('data-model', {}).get('schemas', '')
@@ -79,8 +78,7 @@ def print_group_members_tree(group_data: dict):
         sub_branch = '   ' if is_last else '│  '
 
         # Member basic info
-        name = f"{member.get('first_name','')} {member.get('last_name','')}".strip(
-        )
+        name = f'{member.get("first_name", "")} {member.get("last_name", "")}'.strip()
         if not name:
             name = member.get('common_name', 'Unknown')
         email = member.get('email', 'N/A')
@@ -184,7 +182,7 @@ def print_db_permission_detail(data: dict):
         return
 
     groups = data.get('groups', {})
-    print(f"🧾 Revision: {data.get('revision', 'N/A')}\n")
+    print(f'🧾 Revision: {data.get("revision", "N/A")}\n')
 
     # --- Iterate through groups ---
     for group_id, dbs in groups.items():
