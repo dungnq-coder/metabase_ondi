@@ -2,13 +2,17 @@ short_code: bl
 display_name: Backpack Legends (Pack Adventure)
 
 table_mapping:
+  fortias-saga.flattened_table.character: pack-adventure.identity_flatten_tables.firebase_character
+  fortias-saga.flattened_table.equipment: pack-adventure.identity_flatten_tables.firebase_equipment
+  fortias-saga.flattened_table.huynn_cs_character: pack-adventure.dashboard_table.huynn_cs_character
+  fortias-saga.flattened_table.huynn_cs_support: pack-adventure.dashboard_table.huynn_cs_support
   fortias-saga.flattened_table.huynn_dh_active_daily: pack-adventure.dashboard_table.bp_active_daily
   fortias-saga.flattened_table.huynn_dh_campaign_progress: pack-adventure.dashboard_table.bp_campaign_progress
-  fortias-saga.huynn_temp_table.dh_feature_max_stage: pack-adventure.dashboard_table.bp_feature_max_stage
+  fortias-saga.flattened_table.in_app_purchase: pack-adventure.identity_flatten_tables.firebase_in_app_purchase
+  fortias-saga.flattened_table.user_engagement: pack-adventure.identity_flatten_tables.firebase_user_engagement
   fortias-saga.huynn_temp_table.dh_iaa_dashboard: pack-adventure.dashboard_table.bp_iaa_dashboard
   fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard: pack-adventure.dashboard_table.bp_iaa_placement_dashboard
-  fortias-saga.huynn_temp_table.level_mode_summary: pack-adventure.dashboard_table.bp_level_mode_summary
   fortias-saga.flattened_table.huynn_dh_tutorial: pack-adventure.dashboard_table.bp_tutorial
 
 rename:
-  "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')": "('Backpack Legends_Android','Backpack Legends_iOS')"
+  "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')": "('Backpack Legends')"

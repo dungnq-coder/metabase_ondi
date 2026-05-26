@@ -19,6 +19,7 @@ table_mapping:
   fortias-saga.flattened_table.huynn_dh_tutorial: sword-rouge-lite.dashboard_table.huynn_sr_tutorial
   fortias-saga.huynn_temp_table.level_mode_summary: sword-rouge-lite.dashboard_table.game_mode_summary
   fortias-saga.flattened_table.huynn_dh_resource_management_by_source: sword-rouge-lite.flattened_table.sr_resource_management_by_source
+  fortias-saga.huynn_temp_table.dh_iaa_placement_dashboard: sword-rouge-lite.dashboard_table.dh_iaa_placement_dashboard
 
 rename:
   "('Fortias Saga Android', 'Fortias Saga iOS', 'Fortias Saga: Action Adventure')": "('AND_Hero Blitz','Hero Blitz_AOS','Hero Blitz_iOS')"

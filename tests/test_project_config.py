@@ -141,9 +141,9 @@ def test_real_repo_fs_present():
     r = ProjectRegistry.load(projects_dir)
     assert r.pivot_short_code == 'fs'
     assert r.get('fs') is not None
-    # Inverse bl: 7 entries
+    # Inverse bl mapping is non-empty and round-trips a known entry.
     inv = r.resolve('bl', 'fs')
-    assert len(inv.table_mapping) == 7
+    assert len(inv.table_mapping) == len(r.get('bl').table_mapping)
     assert 'pack-adventure.dashboard_table.bp_active_daily' in inv.table_mapping
     assert (
         inv.table_mapping['pack-adventure.dashboard_table.bp_active_daily']
